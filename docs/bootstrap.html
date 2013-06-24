@@ -1,0 +1,172 @@
+
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+   <!--
+This HTML was auto-generated from MATLAB code.
+To make changes, update the MATLAB code and republish this document.
+      --><title>Advanced Planning Experiment/Fractal</title><meta name="generator" content="MATLAB 7.12"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2012-06-08"><meta name="DC.source" content="bootstrap.m"><style type="text/css">
+
+body {
+  background-color: white;
+  margin:10px;
+}
+
+h1 {
+  color: #990000; 
+  font-size: x-large;
+}
+
+h2 {
+  color: #990000;
+  font-size: medium;
+}
+
+/* Make the text shrink to fit narrow windows, but not stretch too far in 
+wide windows. */ 
+p,h1,h2,div.content div {
+  max-width: 600px;
+  /* Hack for IE6 */
+  width: auto !important; width: 600px;
+}
+
+pre.codeinput {
+  background: #EEEEEE;
+  padding: 10px;
+}
+@media print {
+  pre.codeinput {word-wrap:break-word; width:100%;}
+} 
+
+span.keyword {color: #0000FF}
+span.comment {color: #228B22}
+span.string {color: #A020F0}
+span.untermstring {color: #B20000}
+span.syscmd {color: #B28C00}
+
+pre.codeoutput {
+  color: #666666;
+  padding: 10px;
+}
+
+pre.error {
+  color: red;
+}
+
+p.footer {
+  text-align: right;
+  font-size: xx-small;
+  font-weight: lighter;
+  font-style: italic;
+  color: gray;
+}
+
+  </style></head><body><div class="content"><h1>Advanced Planning Experiment/Fractal</h1><!--introduction--><!--/introduction--><h2>Contents</h2><div><ul><li><a href="#2">Introduction</a></li><li><a href="#3">Bootstrapping</a></li><li><a href="#4">Architecture</a></li><li><a href="#6">APEX/F Documentation</a></li><li><a href="#7">Version History</a></li></ul></div><p><img vspace="5" hspace="5" src="apex-logo.png" alt=""> </p><h2>Introduction<a name="2"></a></h2><p>This is the online documentation for the <i>Advanced Planning Experiment/Fractal</i>, or <b>APEX/F</b>.</p><h2>Bootstrapping<a name="3"></a></h2><p>The first step that occurs is the bootstrapping process, located in <tt>./bootstrap.m</tt>. The bootstrap clears the workspace (so make sure you've saved everything you need), adds the appropriate directories to the path, and loads in scan data. The default bootstrap loads DICOM images, although any greyscale data can be loaded (note that RGB data is not supported in the current version of APEX). Slides should be stored as an x &times; y &times; n array, where x and y refer to the horizontal and vertical dimensions of the scans (each slide must be of the same dimension) and n refers to the number of scans. Developers can use the dir_contents function to list files within a directory; this data is a cell array of type char.</p><h2>Architecture<a name="4"></a></h2><p>There are four key parts of APEX/F.</p><div><ul><li>The <tt>apex</tt> function creates a user interface and sets up callbacks</li><li><a href="Viewer.html"><tt>Viewer</tt></a> is the top level in the APEX graphical stack. It is an abstraction for all the CT scans in the system and mainly provides routing to individual <tt>Slice</tt> objects.</li><li><a href="Slice.html"><tt>Slice</tt></a> objects contain many <tt>Layer</tt> s. They are an abstraction of an individual CT scan.</li><li><a href="Layer.html"><tt>Layer</tt></a> (and the subclasses <a href="BitmapLayer.html"><tt>BitmapLayer.html</tt></a>, <a href="PointLayer.html"><tt>PointLayer</tt></a> and <a href="InterpolationLayer"><tt>InterpolationLayer</tt></a>) are the lowest level in the APEX graphical stack. They break down individual types of functionality into different classes.</li></ul></div><p>A typical request (for example, an action is captured as part of an event listener attached to a <tt>Layer</tt>) and travels down the graphical stack in a similar fasion to layer encapsulation in networking. Most requests execute in the scope of the layer.</p><p><img vspace="5" hspace="5" src="general-arch.png" alt=""> </p><h2>APEX/F Documentation<a name="6"></a></h2><div><ul><li><a href="bootstrap.html">Architecture and Bootstrapping</a></li><li><a href="Viewer.html">Viewer</a></li><li><a href="Slice.html">Slice</a></li><li><a href="Layer.html">Layer</a></li><li><a href="BitmapLayer.html">BitmapLayer</a></li><li><a href="PointLayer.html">PointLayer</a></li><li><a href="InterpolationLayer.html">InterpolationLayer</a></li></ul></div><h2>Version History<a name="7"></a></h2><div><ul><li>v1.x: legacy <tt>GUIDE</tt>-based application. No longer supported.</li><li>v2.0: redesign of application. New, object-orientated architecture, including copy and paste, undo and temporal interpolation</li><li>v2.1: multiple layers support</li><li>v2.1.1: bugfixes, saves TIFF image of boundary</li><li>v2.2: supports erosion and dilation of <tt>InterpolationLayer</tt></li><li>v2.3: added support for layers of differing dimensions. Added Windows standalone deployment.</li></ul></div><p class="footer"><br>
+      Published with MATLAB&reg; 7.12<br></p></div><!--
+##### SOURCE BEGIN #####
+%% Advanced Planning Experiment/Fractal
+%%
+% <<apex-logo.png>>
+%
+%% Introduction
+% This is the online documentation for the _Advanced Planning
+% Experiment/Fractal_, or *APEX/F*.
+%
+%% Bootstrapping
+% The first step that occurs is the bootstrapping process, located in 
+% |./bootstrap.m|. The bootstrap clears the workspace (so make sure
+% you've saved everything you need), adds the appropriate directories
+% to the path, and loads in scan data. The default bootstrap loads DICOM
+% images, although any greyscale data can be loaded (note that RGB data
+% is not supported in the current version of APEX). Slides should be
+% stored as an x × y × n array, where x and y refer to the horizontal
+% and vertical dimensions of the scans (each slide must be of the same
+% dimension) and n refers to the number of scans. Developers can use the 
+% dir_contents function to list files within a directory; this data is
+% a cell array of type char.
+%% Architecture
+% There are four key parts of APEX/F.
+%
+% * The |apex| function creates a user interface and sets up callbacks
+% * <Viewer.html |Viewer|> is the top level in the APEX graphical stack. It is an
+% abstraction for all the CT scans in the system and mainly provides
+% routing to individual |Slice| objects.
+% * <Slice.html |Slice|> objects contain many |Layer| s. They are an
+% abstraction of an individual CT scan.
+% * <Layer.html |Layer|> (and the subclasses <BitmapLayer.html
+% |BitmapLayer.html|>, <PointLayer.html |PointLayer|> and
+% <InterpolationLayer |InterpolationLayer|>) are the lowest level in the
+% APEX graphical stack. They break down individual types of functionality
+% into different classes.
+%
+% A typical request (for example, an action is captured as part of an event
+% listener attached to a |Layer|) and travels down the graphical stack in a
+% similar fasion to layer encapsulation in networking. Most requests
+% execute in the scope of the layer.
+%
+%%
+% <<general-arch.png>>
+%
+%% APEX/F Documentation
+%
+% * <bootstrap.html Architecture and Bootstrapping>
+% * <Viewer.html Viewer>
+% * <Slice.html Slice>
+% * <Layer.html Layer>
+% * <BitmapLayer.html BitmapLayer>
+% * <PointLayer.html PointLayer>
+% * <InterpolationLayer.html InterpolationLayer>
+%
+%% Version History
+%
+% * v1.x: legacy |GUIDE|-based application. No longer supported.
+% * v2.0: redesign of application. New, object-orientated
+% architecture, including copy and paste, undo and temporal interpolation
+% * v2.1: multiple layers support
+% * v2.1.1: bugfixes, saves TIFF image of boundary
+% * v2.2: supports erosion and dilation of |InterpolationLayer|
+% * v2.3: added support for layers of differing dimensions. Added Windows
+% standalone deployment.
+% 
+clc
+clear all
+clear java
+clear classes
+
+disp('REPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASH')
+disp('Welcome to APEX/F!')
+disp('REPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASHREPLACE_WITH_DASH_DASH')
+
+addpath(fullfile('assets'));
+addpath(fullfile('system'));
+addpath(fullfile('system', 'viewer'));
+addpath(fullfile('system', 'spinner'));
+
+% Get the data directory
+data_dir = uigetdir(fullfile(pwd, '..', 'data'));
+%data_dir = fullfile(pwd, '..', 'data');
+
+if data_dir == 0
+    disp('No data directory, quitting...')
+    return
+end
+
+fprintf('Using data in %s \n', data_dir)
+
+% Get the data
+dir_contents = dir_contents(data_dir);
+slides = cell(1, numel(dir_contents));
+bar = waitbar(0, 'Loading slides...');
+for i = 1 : numel(dir_contents)
+%     slides(:, :, i) = dicomread(fullfile(data_dir, dir_contents{i}));
+    slides{i} = imread(fullfile(data_dir, dir_contents{i}));
+    %metadata(i) = dicominfo(fullfile(data_dir, dir_contents{i}));
+    waitbar(i / numel(dir_contents), bar, 'Loading slides...');
+end
+close(bar);
+
+% Load GUI
+apex(slides);
+##### SOURCE END #####
+--></body></html>

@@ -1,0 +1,396 @@
+
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+   <!--
+This HTML was auto-generated from MATLAB code.
+To make changes, update the MATLAB code and republish this document.
+      --><title>PointLayer</title><meta name="generator" content="MATLAB 7.12"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2012-05-21"><meta name="DC.source" content="PointLayer.m"><style type="text/css">
+
+body {
+  background-color: white;
+  margin:10px;
+}
+
+h1 {
+  color: #990000; 
+  font-size: x-large;
+}
+
+h2 {
+  color: #990000;
+  font-size: medium;
+}
+
+/* Make the text shrink to fit narrow windows, but not stretch too far in 
+wide windows. */ 
+p,h1,h2,div.content div {
+  max-width: 600px;
+  /* Hack for IE6 */
+  width: auto !important; width: 600px;
+}
+
+pre.codeinput {
+  background: #EEEEEE;
+  padding: 10px;
+}
+@media print {
+  pre.codeinput {word-wrap:break-word; width:100%;}
+} 
+
+span.keyword {color: #0000FF}
+span.comment {color: #228B22}
+span.string {color: #A020F0}
+span.untermstring {color: #B20000}
+span.syscmd {color: #B28C00}
+
+pre.codeoutput {
+  color: #666666;
+  padding: 10px;
+}
+
+pre.error {
+  color: red;
+}
+
+p.footer {
+  text-align: right;
+  font-size: xx-small;
+  font-weight: lighter;
+  font-style: italic;
+  color: gray;
+}
+
+  </style></head><body><div class="content"><h1>PointLayer</h1><!--introduction--><p>A <tt>PointLayer</tt> is used in the first stage of boundary determination. In the APEX/application, it is the mechanism for implementing clicking and erasing the initial version of the boundary. An <tt>image</tt> object with CData and AlphaData both set to the current state of the layer (the points which are selected) is used, as is a 2D matrix called the "stack", which records the order in which points have been clicked. This mechanism is important for the interpolation process, which is detailed within the documentation for <a href="InterpolationLayer.html"><tt>InterpolationLayer</tt></a>.</p><p><b>APEX/F Documentation</b></p><div><ul><li><a href="bootstrap.html">Architecture and Bootstrapping</a></li><li><a href="Viewer.html">Viewer</a></li><li><a href="Slice.html">Slice</a></li><li><a href="Layer.html">Layer</a></li><li><a href="BitmapLayer.html">BitmapLayer</a></li><li><a href="PointLayer.html">PointLayer</a></li><li><a href="InterpolationLayer.html">InterpolationLayer</a></li></ul></div><!--/introduction--><h2>Contents</h2><div><ul><li><a href="#2">Properties (Private)</a></li><li><a href="#3">PointLayer (Constructor)</a></li><li><a href="#4">hasDataForCopy</a></li><li><a href="#5">getDataForCopy</a></li><li><a href="#6">setCopyData</a></li><li><a href="#7">getStackSize</a></li><li><a href="#8">getStack</a></li><li><a href="#9">setStack</a></li><li><a href="#10">indexOf</a></li><li><a href="#11">addClickToStack</a></li><li><a href="#12">removeClickFromStack</a></li><li><a href="#13">paint</a></li><li><a href="#14">unpaint</a></li><li><a href="#15">undoLastPoint</a></li><li><a href="#16">clear</a></li></ul></div><p><img vspace="5" hspace="5" src="general-arch.png" alt=""> </p><pre class="codeinput"><span class="keyword">classdef</span> PointLayer &lt; Layer
+</pre><h2>Properties (Private)<a name="2"></a></h2><p><b><tt>stack</tt></b>: a 2D matrix containing the order of pixel locations clicked. Newer clicks are are the bottom.</p><pre class="codeinput">    properties (Access = private)
+        stack
+    <span class="keyword">end</span>
+
+    methods (Access = public)
+</pre><h2>PointLayer (Constructor)<a name="3"></a></h2><p>Instantiate an instance of <tt>PointLayer</tt>.</p><pre class="codeinput">        <span class="keyword">function</span> obj = PointLayer(parent)
+            obj = obj@Layer(parent);
+            obj.stack = [];
+        <span class="keyword">end</span>
+</pre><h2>hasDataForCopy<a name="4"></a></h2><p>See <a href="Layer.html">Layer documentation</a>.</p><pre class="codeinput">        <span class="keyword">function</span> has_data = hasDataForCopy(obj)
+<span class="comment">%             if obj.getStackSize() &gt;= 1</span>
+<span class="comment">%                 has_data = true;</span>
+<span class="comment">%             else</span>
+<span class="comment">%                 has_data = false;</span>
+<span class="comment">%             end</span>
+
+            has_data = length(obj.stack);
+        <span class="keyword">end</span>
+</pre><h2>getDataForCopy<a name="5"></a></h2><p>See <a href="Layer.html">Layer documentation</a>.</p><pre class="codeinput">        <span class="keyword">function</span> data = getDataForCopy(obj)
+            data = cell(1, 2);
+
+            data{1} = obj.getStack();
+            data{2} = obj.getCData();
+        <span class="keyword">end</span>
+</pre><h2>setCopyData<a name="6"></a></h2><p>See <a href="Layer.html">Layer documentation</a>.</p><pre class="codeinput">        <span class="keyword">function</span> setCopyData(obj, data)
+            t = data{1};
+
+            <span class="keyword">for</span> i = 1 : length(t)
+                t
+                x = t(i, 1);
+                y = t(i, 2);
+                obj.addClickToStack(x, y);
+                obj.paint(x, y);
+            <span class="keyword">end</span>
+        <span class="keyword">end</span>
+</pre><h2>getStackSize<a name="7"></a></h2><p>Query the number of points in the stack, or the number of total point clicks.</p><p><b>Returns</b></p><p><tt>size</tt>: number of clicks in the stack</p><pre class="codeinput">        <span class="keyword">function</span> size = getStackSize(obj)
+            size = length(obj.stack);
+        <span class="keyword">end</span>
+</pre><h2>getStack<a name="8"></a></h2><p>Return the stack. Remember that MATLAB passes by reference until a change is made to the object.</p><p><b>Returns</b></p><p><tt>s</tt>: the stack for this <tt>PointLayer</tt></p><pre class="codeinput">        <span class="keyword">function</span> s = getStack(obj)
+            s = obj.stack;
+        <span class="keyword">end</span>
+</pre><h2>setStack<a name="9"></a></h2><p>Assign a new stack</p><p><b>Parameters</b></p><p><tt>s</tt>: the new stack</p><pre class="codeinput">        <span class="keyword">function</span> setStack(obj, s)
+            obj.stack = s;
+        <span class="keyword">end</span>
+</pre><h2>indexOf<a name="10"></a></h2><p>Return the position in the stack of coordinates (<i>x</i>, <i>y</i>), or -1 if they do not exist. Also returns -1 if the stack is empty.</p><p><b>Parameters</b></p><p><tt>x</tt>: x coordinate</p><p><tt>y</tt>: y coordinate</p><p><b>Returns</b></p><p><tt>clicked</tt>: position of the coordinate, or -1 if it does not exist</p><pre class="codeinput">        <span class="keyword">function</span> clicked = indexOf(obj, x, y)
+            <span class="comment">% Check if empty first</span>
+            <span class="keyword">if</span> isempty(obj.stack)
+                clicked = -1;
+            <span class="keyword">else</span>
+                in = find(obj.stack(:, 1) == x &amp; obj.stack(:, 2) == y);
+
+                <span class="keyword">if</span> isempty(in)
+                    clicked = -1;
+                <span class="keyword">else</span>
+                    clicked = in;
+                <span class="keyword">end</span>
+            <span class="keyword">end</span>
+        <span class="keyword">end</span>
+</pre><h2>addClickToStack<a name="11"></a></h2><p>Adds an (<i>x</i>, <i>y</i>) coordinate to the stack <b>unless</b> it does not already exist. Multiples of clicks are not permitted.</p><p><b>Paramters</b></p><p><tt>x</tt>: x coordinate</p><p><tt>y</tt>: y coordinate</p><pre class="codeinput">        <span class="keyword">function</span> addClickToStack(obj, x, y)
+            <span class="keyword">if</span> obj.indexOf(x, y) == -1
+                obj.stack(end + 1, :) = [x, y];
+            <span class="keyword">end</span>
+        <span class="keyword">end</span>
+</pre><h2>removeClickFromStack<a name="12"></a></h2><p>Removes an (<i>x</i>, <i>y</i>) from the stack.</p><p><b>Paramters</b></p><p><tt>x</tt>: x coordinate</p><p><tt>y</tt>: y coordinate</p><pre class="codeinput">        <span class="keyword">function</span> removeClickFromStack(obj, x, y)
+            position = obj.indexOf(x, y);
+
+            <span class="keyword">if</span> position == -1
+                <span class="comment">% The point doesn't exist, so can't remove it</span>
+                <span class="keyword">return</span>
+            <span class="keyword">end</span>
+
+            obj.stack(position, :) = [];
+        <span class="keyword">end</span>
+</pre><h2>paint<a name="13"></a></h2><p>Add a point to the CData and update the AlphaData accordingly</p><p><b>Paramters</b></p><p><tt>x</tt>: x coordinate</p><p><tt>y</tt>: y coordinate</p><pre class="codeinput">        <span class="keyword">function</span> paint(obj, x, y)
+            img = obj.getCData();
+            img(y, x) = 1;
+            obj.setCData(img);
+            obj.setAlphaData(img);
+        <span class="keyword">end</span>
+</pre><h2>unpaint<a name="14"></a></h2><p>Remove a point to the CData and update the AlphaData accordingly</p><p><b>Paramters</b></p><p><tt>x</tt>: x coordinate</p><p><tt>y</tt>: y coordinate</p><pre class="codeinput">        <span class="keyword">function</span> unpaint(obj, x, y)
+            img = obj.getCData();
+            img(y, x) = 0;
+            obj.setCData(img);
+            obj.setAlphaData(img);
+        <span class="keyword">end</span>
+</pre><h2>undoLastPoint<a name="15"></a></h2><p>Unpaints and removes the newest click in the stack</p><pre class="codeinput">        <span class="keyword">function</span> undoLastPoint(obj)
+            x = obj.stack(end, 1);
+            y = obj.stack(end, 2);
+
+            obj.unpaint(x, y);
+            obj.removeClickFromStack(x, y);
+        <span class="keyword">end</span>
+</pre><h2>clear<a name="16"></a></h2><p>Clear all CData, AlphaData and the stack.</p><pre class="codeinput">        <span class="keyword">function</span> clear(obj)
+            <span class="keyword">for</span> i = 1 : length(obj.stack)
+                obj.undoLastPoint();
+            <span class="keyword">end</span>
+
+            <span class="comment">% Add zero data, otherwise the image will have 0 size, meaning</span>
+            <span class="comment">% it cannot be clicked</span>
+            obj.setCData(zeros(512));
+            obj.setAlphaData(zeros(512));
+        <span class="keyword">end</span>
+</pre><pre class="codeinput">    <span class="keyword">end</span>
+</pre><pre class="codeinput"><span class="keyword">end</span>
+</pre><p class="footer"><br>
+      Published with MATLAB&reg; 7.12<br></p></div><!--
+##### SOURCE BEGIN #####
+%% PointLayer
+% A |PointLayer| is used in the first stage of boundary determination. In
+% the APEX/application, it is the mechanism for implementing clicking and
+% erasing the initial version of the boundary. An |image| object with CData
+% and AlphaData both set to the current state of the layer (the points
+% which are selected) is used, as is a 2D matrix called the "stack", which
+% records the order in which points have been clicked. This mechanism is
+% important for the interpolation process, which is detailed within the
+% documentation for <InterpolationLayer.html |InterpolationLayer|>.
+%
+% *APEX/F Documentation*
+%
+% * <bootstrap.html Architecture and Bootstrapping>
+% * <Viewer.html Viewer>
+% * <Slice.html Slice>
+% * <Layer.html Layer>
+% * <BitmapLayer.html BitmapLayer>
+% * <PointLayer.html PointLayer>
+% * <InterpolationLayer.html InterpolationLayer>
+% 
+%%
+% <<general-arch.png>>
+%
+classdef PointLayer < Layer
+    %% Properties (Private)
+    % *|stack|*: a 2D matrix containing the order of pixel locations
+    % clicked. Newer clicks are are the bottom.
+    properties (Access = private)
+        stack
+    end
+    
+    methods (Access = public)
+        %% PointLayer (Constructor)
+        % Instantiate an instance of |PointLayer|.
+        function obj = PointLayer(parent)
+            obj = obj@Layer(parent);
+            obj.stack = [];
+        end
+        
+        %% hasDataForCopy
+        % See <Layer.html Layer documentation>.
+        function has_data = hasDataForCopy(obj)
+%             if obj.getStackSize() >= 1
+%                 has_data = true;
+%             else
+%                 has_data = false;
+%             end
+            
+            has_data = length(obj.stack);
+        end
+        
+        %% getDataForCopy
+        % See <Layer.html Layer documentation>.
+        function data = getDataForCopy(obj)
+            data = cell(1, 2);
+            
+            data{1} = obj.getStack();
+            data{2} = obj.getCData();
+        end
+        
+        %% setCopyData
+        % See <Layer.html Layer documentation>.
+        function setCopyData(obj, data)
+            t = data{1};
+            
+            for i = 1 : length(t)
+                t
+                x = t(i, 1);
+                y = t(i, 2);
+                obj.addClickToStack(x, y);
+                obj.paint(x, y);
+            end
+        end
+       
+        %% getStackSize
+        % Query the number of points in the stack, or the number of total
+        % point clicks.
+        %
+        % *Returns*
+        %
+        % |size|: number of clicks in the stack
+        function size = getStackSize(obj)
+            size = length(obj.stack);
+        end
+        
+        %% getStack
+        % Return the stack. Remember that MATLAB passes by reference until
+        % a change is made to the object.
+        %
+        % *Returns*
+        %
+        % |s|: the stack for this |PointLayer|
+        function s = getStack(obj)
+            s = obj.stack;
+        end
+        
+        %% setStack
+        % Assign a new stack
+        %
+        % *Parameters*
+        %
+        % |s|: the new stack
+        function setStack(obj, s)
+            obj.stack = s;
+        end
+        
+        %% indexOf
+        % Return the position in the stack of coordinates (_x_, _y_), or -1
+        % if they do not exist. Also returns -1 if the stack is empty.
+        %
+        % *Parameters*
+        %
+        % |x|: x coordinate
+        %
+        % |y|: y coordinate
+        %
+        % *Returns*
+        %
+        % |clicked|: position of the coordinate, or -1 if it does not exist
+        function clicked = indexOf(obj, x, y)
+            % Check if empty first
+            if isempty(obj.stack)
+                clicked = -1;
+            else
+                in = find(obj.stack(:, 1) == x & obj.stack(:, 2) == y);
+            
+                if isempty(in)
+                    clicked = -1;
+                else
+                    clicked = in;
+                end
+            end
+        end
+        
+        %% addClickToStack
+        % Adds an (_x_, _y_) coordinate to the stack *unless* it does not
+        % already exist. Multiples of clicks are not permitted.
+        %
+        % *Paramters*
+        %
+        % |x|: x coordinate
+        %
+        % |y|: y coordinate
+        function addClickToStack(obj, x, y)
+            if obj.indexOf(x, y) == -1
+                obj.stack(end + 1, :) = [x, y];
+            end
+        end
+        
+        %% removeClickFromStack
+        % Removes an (_x_, _y_) from the stack.
+        %
+        % *Paramters*
+        %
+        % |x|: x coordinate
+        %
+        % |y|: y coordinate
+        function removeClickFromStack(obj, x, y)
+            position = obj.indexOf(x, y);
+            
+            if position == -1
+                % The point doesn't exist, so can't remove it
+                return
+            end
+            
+            obj.stack(position, :) = [];
+        end
+        
+        %% paint
+        % Add a point to the CData and update the AlphaData accordingly
+        %
+        % *Paramters*
+        %
+        % |x|: x coordinate
+        %
+        % |y|: y coordinate
+        function paint(obj, x, y)
+            img = obj.getCData();
+            img(y, x) = 1;
+            obj.setCData(img);
+            obj.setAlphaData(img);
+        end
+        
+        %% unpaint
+        % Remove a point to the CData and update the AlphaData accordingly
+        %
+        % *Paramters*
+        %
+        % |x|: x coordinate
+        %
+        % |y|: y coordinate
+        function unpaint(obj, x, y)
+            img = obj.getCData();
+            img(y, x) = 0;
+            obj.setCData(img);
+            obj.setAlphaData(img);
+        end
+        
+        %% undoLastPoint
+        % Unpaints and removes the newest click in the stack
+        function undoLastPoint(obj)
+            x = obj.stack(end, 1);
+            y = obj.stack(end, 2);
+            
+            obj.unpaint(x, y);
+            obj.removeClickFromStack(x, y);
+        end
+        
+        %% clear
+        % Clear all CData, AlphaData and the stack.
+        function clear(obj)
+            for i = 1 : length(obj.stack)
+                obj.undoLastPoint();    
+            end
+            
+            % Add zero data, otherwise the image will have 0 size, meaning
+            % it cannot be clicked
+            obj.setCData(zeros(512));
+            obj.setAlphaData(zeros(512));
+        end
+    end
+end
+##### SOURCE END #####
+--></body></html>

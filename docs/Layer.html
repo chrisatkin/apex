@@ -1,0 +1,605 @@
+
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+   <!--
+This HTML was auto-generated from MATLAB code.
+To make changes, update the MATLAB code and republish this document.
+      --><title>Layer</title><meta name="generator" content="MATLAB 7.12"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2012-06-07"><meta name="DC.source" content="Layer.m"><style type="text/css">
+
+body {
+  background-color: white;
+  margin:10px;
+}
+
+h1 {
+  color: #990000; 
+  font-size: x-large;
+}
+
+h2 {
+  color: #990000;
+  font-size: medium;
+}
+
+/* Make the text shrink to fit narrow windows, but not stretch too far in 
+wide windows. */ 
+p,h1,h2,div.content div {
+  max-width: 600px;
+  /* Hack for IE6 */
+  width: auto !important; width: 600px;
+}
+
+pre.codeinput {
+  background: #EEEEEE;
+  padding: 10px;
+}
+@media print {
+  pre.codeinput {word-wrap:break-word; width:100%;}
+} 
+
+span.keyword {color: #0000FF}
+span.comment {color: #228B22}
+span.string {color: #A020F0}
+span.untermstring {color: #B20000}
+span.syscmd {color: #B28C00}
+
+pre.codeoutput {
+  color: #666666;
+  padding: 10px;
+}
+
+pre.error {
+  color: red;
+}
+
+p.footer {
+  text-align: right;
+  font-size: xx-small;
+  font-weight: lighter;
+  font-style: italic;
+  color: gray;
+}
+
+  </style></head><body><div class="content"><h1>Layer</h1><!--introduction--><p>A <tt>Layer</tt> is the lowest level of abstraction within the APEX/F graphical stack. A Layer is a combination of an abstraction of an <tt>image</tt> handle and operations that are performed upon layers.</p><p>There are three kinds of Layer:</p><div><ul><li><b><tt>BitmapLayer</tt></b>, for containing bitmapped images. These are used to hold the underlying CT scan images</li><li><b><tt>PointLayer</tt></b>, for implementing the first step in the boundary determination</li><li><b><tt>InterpolationLayer</tt></b>, which implements dilation and erosion, as well as maximum internal rectangle determination algorithm.</li></ul></div><p><b>Layer states: Visibility and Activity</b></p><p>There are two important states for <tt>Layer</tt> objects, visibility and activity. <b>Visibility</b> refers to whether or not the layer is visible within the figure, assuming that the containing <tt>Slice</tt> is visible. <b>Activity</b> is a related concept, determining whether or not the <tt>Layer</tt> <i>should</i> be visible. This is used to ensure different <tt>Layer</tt> objects retain correct visibilities whilst setting visibility of <tt>Slice</tt> objects. Visible layers are active, but active layers are not nessecarily visible - they will not be visible if their <tt>Slice</tt> container is not visible.</p><p>Activity can be thought of as a historical record about the visibility of a <tt>Layer</tt> whilst the containing <tt>Slice</tt> is not visible.</p><p><b>APEX/F Documentation</b></p><div><ul><li><a href="bootstrap.html">Architecture and Bootstrapping</a></li><li><a href="Viewer.html">Viewer</a></li><li><a href="Slice.html">Slice</a></li><li><a href="Layer.html">Layer</a></li><li><a href="BitmapLayer.html">BitmapLayer</a></li><li><a href="PointLayer.html">PointLayer</a></li><li><a href="InterpolationLayer.html">InterpolationLayer</a></li></ul></div><!--/introduction--><h2>Contents</h2><div><ul><li><a href="#2">Properties (Private)</a></li><li><a href="#3">hasDataForCopy (abstract)</a></li><li><a href="#4">getDataForCopy (abstract)</a></li><li><a href="#5">setCopyData (abstract)</a></li><li><a href="#7">Layer (constuctor)</a></li><li><a href="#8">setVisibility</a></li><li><a href="#9">getVisibility</a></li><li><a href="#10">getCData</a></li><li><a href="#11">getDimensions</a></li><li><a href="#12">setCData</a></li><li><a href="#13">setAlphaData</a></li><li><a href="#14">setActive</a></li><li><a href="#15">isActive</a></li><li><a href="#16">setContrastEnabled</a></li><li><a href="#17">setZoomEnabled</a></li><li><a href="#18">setButtonDownCallback</a></li><li><a href="#19">setButtonUpCallback</a></li><li><a href="#20">setMouseMotionCallback</a></li><li><a href="#21">removeMouseMotionCallback</a></li><li><a href="#22">removeButtonDownCallback</a></li><li><a href="#23">removeButtonUpCallback</a></li><li><a href="#26">openConstrast (Private)</a></li><li><a href="#27">closeContrast (Private)</a></li><li><a href="#28">openZoom (Private)</a></li><li><a href="#29">closeZoom (Private)</a></li></ul></div><p><img vspace="5" hspace="5" src="general-arch.png" alt=""> </p><pre class="codeinput"><span class="keyword">classdef</span> Layer &lt; handle
+</pre><h2>Properties (Private)<a name="2"></a></h2><p><b><tt>parent</tt></b>: the parent <tt>axes</tt> handle into which an <tt>image</tt> handle should be created</p><p><b><tt>image</tt></b>: <tt>image</tt> handle for displaying data and attaching events to</p><p><b><tt>active</tt></b>: <tt>bool</tt> represnting the current activity of the layer. Note that visibility is determined using <tt>get(obj.image, 'Visible')</tt> rather than a <tt>bool</tt></p><p><b><tt>contrast</tt></b>: <tt>bool</tt> representing whether a constrast tool is displayed for this layer</p><p><b><tt>contrast_handle</tt></b>: handle to the contrast viewer, if displayed</p><p><b><tt>zoom</tt></b>: <tt>bool</tt> representing whether a high-powered zoom is displayed for this layer</p><p><b><tt>zoom_handle</tt></b>: handle to the high-power zoom, if displayed</p><p><b><tt>callbacks</tt></b>: callback objects</p><pre class="codeinput">    properties (Access = private)
+        parent
+        image
+        active
+        contrast
+        contrast_handle
+        zoom
+        zoom_handle
+        callbacks
+    <span class="keyword">end</span>
+
+    methods (Abstract)
+</pre><h2>hasDataForCopy (abstract)<a name="3"></a></h2><p>Abstract methods that determines if the current slide has data available for copying. See the <a href="Viewer.html">Viewer documentation</a> for a general overview.</p><p><b>Returns</b></p><p><tt>has_data</tt>: <tt>bool</tt> determining if the <tt>Layer</tt> has data suitable for copying</p><pre class="codeinput">        has_data = hasDataForCopy(obj);
+</pre><h2>getDataForCopy (abstract)<a name="4"></a></h2><p>Abstract method for getting data to be copied. See the <a href="Viewer.html">Viewer documentation</a> for a general overview.</p><p><b>Returns</b></p><p><tt>data</tt>: a <tt>cell array</tt> of data to be copied. Target <tt>Layer</tt> can "handle" the cell array appropriately.</p><pre class="codeinput">        data = getDataForCopy(obj);
+</pre><h2>setCopyData (abstract)<a name="5"></a></h2><p>Assign data from a copy operation. See the <a href="Viewer.html">Viewer documentation</a> for a general overview.</p><p><b>Parameters</b></p><p><tt>data</tt>: the data to be copied</p><pre class="codeinput">        setCopyData(obj, data);
+</pre><pre class="codeinput">    <span class="keyword">end</span>
+
+    methods (Access = public)
+</pre><h2>Layer (constuctor)<a name="7"></a></h2><p>Instantiate an instance of <tt>Layer</tt>, and creates an <tt>image</tt> handle into which data is inserted.</p><p><b>Parameters</b></p><p><tt>parent</tt>: the parent <tt>axes</tt> of the <tt>image</tt> object</p><pre class="codeinput">        <span class="keyword">function</span> obj = Layer(parent)
+            obj.parent = parent;
+            obj.image = imagesc(<span class="string">'Parent'</span>, obj.parent, <span class="string">'Visible'</span>, <span class="string">'off'</span>);
+            obj.active = false;
+            obj.contrast = false;
+            obj.zoom = false;
+            obj.contrast_handle = false;
+            obj.zoom_handle = false;
+            obj.callbacks = cell(1, 3);
+        <span class="keyword">end</span>
+</pre><h2>setVisibility<a name="8"></a></h2><p>Set the visibility of a <tt>Layer</tt>. Follows the same rules as an <tt>image</tt> handle.</p><p><b>Parameters</b></p><p><tt>visibility</tt>: <tt>char</tt> setting for the <tt>Visible</tt> property of the <tt>image</tt> object</p><pre class="codeinput">        <span class="keyword">function</span> setVisibility(obj, visibility)
+            fprintf(<span class="string">'Setting %s to %s \n'</span>, class(obj), visibility)
+            set(obj.image, <span class="string">'Visible'</span>, visibility);
+        <span class="keyword">end</span>
+</pre><h2>getVisibility<a name="9"></a></h2><p>Determine the visibility of the current <tt>Layer</tt>.</p><p><b>Returns</b></p><p><tt>visibility</tt>: <tt>char</tt> represnting the visibility of the <tt>Layer</tt>. Either <tt>on</tt> or <tt>off</tt>.</p><pre class="codeinput">        <span class="keyword">function</span> visibility = getVisibility(obj)
+            visibility = get(obj.image, <span class="string">'Visible'</span>);
+        <span class="keyword">end</span>
+</pre><h2>getCData<a name="10"></a></h2><p>Return the current CData of the <tt>Layer</tt>.</p><p><b>Returns</b></p><p><tt>data</tt>: current CData of the <tt>Layer</tt></p><pre class="codeinput">        <span class="keyword">function</span> data = getCData(obj)
+            data = get(obj.image, <span class="string">'CData'</span>);
+        <span class="keyword">end</span>
+</pre><h2>getDimensions<a name="11"></a></h2><p>Return the <tt>x</tt>*<tt>y</tt> dimensions of the Layer</p><p><b>Returns</b></p><p><tt>height</tt>: number of pixels in the <tt>y</tt> dimension</p><p><tt>width</tt>: number of pixels in the <tt>x</tt> dimension</p><pre class="codeinput">        <span class="keyword">function</span> [width height] = getDimensions(obj)
+            [width height] = size(obj.getCData());
+        <span class="keyword">end</span>
+</pre><h2>setCData<a name="12"></a></h2><p>Assign CData for the layer. Follows normal rules for <tt>image</tt> CData. <b>Note that only 2-dimensional data is supported. RGB data is unsupported.</b></p><p><b>Parameters</b></p><p><tt>data</tt>: 2-dimensional data of CData to be assigned to the <tt>image</tt>.</p><pre class="codeinput">        <span class="keyword">function</span> setCData(obj, data)
+            set(obj.image, <span class="string">'CData'</span>, data);
+        <span class="keyword">end</span>
+</pre><h2>setAlphaData<a name="13"></a></h2><p>Assign AlphaData for the layer. Follows normal rules for image| AlphaData.</p><p><b>Parameters</b></p><p><tt>data</tt>: 2-dimensional data to be assigned to AlphaData of the <tt>image</tt>.</p><pre class="codeinput">        <span class="keyword">function</span> setAlphaData(obj, data)
+            set(obj.image, <span class="string">'AlphaData'</span>, data);
+        <span class="keyword">end</span>
+</pre><h2>setActive<a name="14"></a></h2><p>Assign the <tt>Layer</tt> s activity.</p><p><b>Parameters</b></p><p><tt>active</tt>: a <tt>bool</tt> for the activity</p><pre class="codeinput">        <span class="keyword">function</span> setActive(obj, active)
+            obj.active = active;
+        <span class="keyword">end</span>
+</pre><h2>isActive<a name="15"></a></h2><p>Query the activity of the <tt>Layer</tt>.</p><p><b>Returns</b></p><p><tt>active</tt>: a <tt>bool</tt> represnting the activity of the <tt>Layer</tt></p><pre class="codeinput">        <span class="keyword">function</span> active = isActive(obj)
+            active = obj.active;
+        <span class="keyword">end</span>
+</pre><h2>setContrastEnabled<a name="16"></a></h2><p>Enable or disable the contrast tool for this <tt>Layer</tt>.</p><p><b>Parameters</b></p><p><tt>enabled</tt>: <tt>char</tt> (either <tt>on</tt> or <tt>off</tt>) determining the visibility of the contrast tool.</p><pre class="codeinput">        <span class="keyword">function</span> setContrastEnabled(obj, enabled)
+            <span class="keyword">if</span> strcmp(enabled, <span class="string">'on'</span>)
+                obj.openContrast();
+            <span class="keyword">elseif</span> strcmp(enabled, <span class="string">'off'</span>)
+                obj.closeContrast();
+            <span class="keyword">else</span>
+                throw(MException(<span class="string">'LayerException:InvalidContrastSetting:setContrastEnabled'</span>, <span class="string">'%s is not a valid contrast option'</span>, enabled));
+            <span class="keyword">end</span>
+        <span class="keyword">end</span>
+</pre><h2>setZoomEnabled<a name="17"></a></h2><p>Enable or disable the high-powered zoom tool for this <tt>Layer</tt>.</p><p><b>Parameters</b></p><p><tt>enalbed</tt>: <tt>char</tt> (either <tt>on</tt> or <tt>off</tt>) determining the visibility of the high-powered zoom tool.</p><pre class="codeinput">        <span class="keyword">function</span> setZoomEnabled(obj, enabled)
+            <span class="keyword">if</span> strcmp(enabled, <span class="string">'on'</span>)
+                obj.openZoom();
+            <span class="keyword">elseif</span> strcmp(enabled, <span class="string">'off'</span>)
+                obj.closeZoom();
+            <span class="keyword">else</span>
+                throw(MException(<span class="string">'LayerException:InvalidContrastSetting:setZoomEnabled'</span>, <span class="string">'%s is not a valid zoom option'</span>, enabled));
+            <span class="keyword">end</span>
+        <span class="keyword">end</span>
+</pre><h2>setButtonDownCallback<a name="18"></a></h2><p>Assign a callback to execute upon mouse click within the <tt>image</tt> object. Executes in the scope of the <tt>Layer</tt> object.</p><p><b>Parameters</b></p><p><tt>fcn</tt>: function identifier or anonymous function to attach to the event</p><pre class="codeinput">        <span class="keyword">function</span> setButtonDownCallback(obj, fcn)
+            <span class="keyword">function</span> LayerButtonDownPrototype(hObject, eventdata)
+                points = get(ancestor(hObject, <span class="string">'axes'</span>), <span class="string">'CurrentPoint'</span>);
+                x = round(points(1, 1));
+                y = round(points(1, 2));
+
+                fcn(x, y, obj);
+            <span class="keyword">end</span>
+
+            set(obj.image, <span class="string">'ButtonDownFcn'</span>, @LayerButtonDownPrototype);
+        <span class="keyword">end</span>
+</pre><h2>setButtonUpCallback<a name="19"></a></h2><p>Similar to <tt>Layer.setButtonDownCallback</tt> except fires upon mouse <i>up</i>.</p><p><b>Parameters</b> <tt>fcn</tt>: function identifier or anonymous function to attach to the event</p><pre class="codeinput">        <span class="keyword">function</span> setButtonUpCallback(obj, fcn)
+            <span class="keyword">function</span> LayerButtonUpPrototype(hObject, eventdata)
+                points = get(ancestor(hObject, <span class="string">'axes'</span>), <span class="string">'CurrentPoint'</span>);
+                x = round(points(1, 1));
+                y = round(points(1, 2));
+
+                fcn(x, y, obj);
+            <span class="keyword">end</span>
+
+            set(obj.image, <span class="string">'ButtonUpFcn'</span>, @LayerButtonUpPrototype);
+        <span class="keyword">end</span>
+</pre><h2>setMouseMotionCallback<a name="20"></a></h2><p>Similar to <tt>Layer.setMouseMotionCallback</tt>, except fires upon mouse drag. <b>Note that the callback <i>must</i> be removed before another one is attached to another <tt>Layer</tt> object, and must be attached to the currently visible <tt>Layer</tt>.</b></p><p><b>Parameters</b></p><p><tt>fcn</tt>: function handle or anonymous function representing action to be fired when the mouse is dragged</p><pre class="codeinput">        <span class="keyword">function</span> setMouseMotionCallback(obj, fcn)
+            down = false;
+
+            <span class="comment">% Function prototype o</span>
+            <span class="keyword">function</span> FigureDown(hObject, eventdata)
+                down = true;
+            <span class="keyword">end</span>
+
+            <span class="keyword">function</span> FigureUp(hObject, eventdata)
+                down = false;
+            <span class="keyword">end</span>
+
+            <span class="keyword">function</span> FigureMotion(hObject, eventdata)
+                <span class="keyword">if</span> down
+                    points = get(ancestor(obj.parent, <span class="string">'axes'</span>), <span class="string">'CurrentPoint'</span>);
+                    x = round(points(1, 1));
+                    y = round(points(1, 2));
+
+<span class="comment">%                     fprintf('This is motion on %i\n', slice_id)</span>
+                    fcn(x, y, obj);
+                <span class="keyword">end</span>
+            <span class="keyword">end</span>
+
+            obj.callbacks{1} = iptaddcallback(ancestor(obj.parent, <span class="string">'figure'</span>), <span class="string">'WindowButtonDownFcn'</span>, @FigureDown);
+            obj.callbacks{2} = iptaddcallback(ancestor(obj.parent, <span class="string">'figure'</span>), <span class="string">'WindowButtonUpFcn'</span>, @FigureUp);
+            obj.callbacks{3} = iptaddcallback(ancestor(obj.parent, <span class="string">'figure'</span>), <span class="string">'WindowButtonMotionFcn'</span>, @FigureMotion);
+        <span class="keyword">end</span>
+</pre><h2>removeMouseMotionCallback<a name="21"></a></h2><p>Remove the attached Motion Listener on the <tt>image</tt>.</p><pre class="codeinput">        <span class="keyword">function</span> removeMouseMotionCallback(obj)
+            iptremovecallback(ancestor(obj.parent, <span class="string">'figure'</span>), <span class="string">'WindowButtonDownFcn'</span>, obj.callbacks{1});
+            iptremovecallback(ancestor(obj.parent, <span class="string">'figure'</span>), <span class="string">'WindowButtonUpFcn'</span>, obj.callbacks{2});
+            iptremovecallback(ancestor(obj.parent, <span class="string">'figure'</span>), <span class="string">'WindowButtonMotionFcn'</span>, obj.callbacks{3});
+        <span class="keyword">end</span>
+</pre><h2>removeButtonDownCallback<a name="22"></a></h2><p>Remove the Button Down listener.</p><pre class="codeinput">        <span class="keyword">function</span> removeButtonDownCallback(obj)
+            iptremovecallback(obj.image, <span class="string">'ButtonDownFcn'</span>, @LayerButtonDownPrototype);
+        <span class="keyword">end</span>
+</pre><h2>removeButtonUpCallback<a name="23"></a></h2><p>Remove the Button Up listener.</p><pre class="codeinput">        <span class="keyword">function</span> removeButtonUpCallback(obj)
+            iptremovecallback(obj.image, <span class="string">'ButtonUpFcn'</span>, @LayerButtonUpPrototype);
+        <span class="keyword">end</span>
+</pre><pre class="codeinput">    <span class="keyword">end</span>
+
+    methods (Access = private)
+</pre><h2>openConstrast (Private)<a name="26"></a></h2><p>Open the contrast tool for the <tt>image</tt></p><pre class="codeinput">        <span class="keyword">function</span> openContrast(obj)
+            obj.contrast = true;
+            obj.contrast_handle = imcontrast(obj.image);
+        <span class="keyword">end</span>
+</pre><h2>closeContrast (Private)<a name="27"></a></h2><p>Close the contrast tool for <tt>image</tt></p><pre class="codeinput">        <span class="keyword">function</span> closeContrast(obj)
+            obj.contrast = false;
+            delete(obj.contrast_handle);
+            obj.contrast_handle = false;
+        <span class="keyword">end</span>
+</pre><h2>openZoom (Private)<a name="28"></a></h2><p>Open high-powered zoom tool for <tt>image</tt></p><pre class="codeinput">        <span class="keyword">function</span> openZoom(obj)
+            obj.zoom = true;
+            obj.zoom_handle = impixelregion(obj.image);
+        <span class="keyword">end</span>
+</pre><h2>closeZoom (Private)<a name="29"></a></h2><p>Close high-powered zoom tool for |image</p><pre class="codeinput">        <span class="keyword">function</span> closeZoom(obj)
+            obj.zoom = false;
+            delete(obj.zoom_handle);
+            obj.zoom_handle = false;
+        <span class="keyword">end</span>
+</pre><pre class="codeinput">    <span class="keyword">end</span>
+</pre><pre class="codeinput"><span class="keyword">end</span>
+</pre><p class="footer"><br>
+      Published with MATLAB&reg; 7.12<br></p></div><!--
+##### SOURCE BEGIN #####
+%% Layer
+% A |Layer| is the lowest level of abstraction within the APEX/F graphical
+% stack. A Layer is a combination of an abstraction of an |image| handle
+% and operations that are performed upon layers.
+%
+% There are three kinds of Layer:
+%
+% * *|BitmapLayer|*, for containing bitmapped images. These are used to
+% hold the underlying CT scan images
+% * *|PointLayer|*, for implementing the first step in the boundary
+% determination
+% * *|InterpolationLayer|*, which implements dilation and erosion, as well
+% as maximum internal rectangle determination algorithm.
+%
+% *Layer states: Visibility and Activity*
+%
+% There are two important states for |Layer| objects, visibility and
+% activity. *Visibility* refers to whether or not the layer is visible
+% within the figure, assuming that the containing |Slice| is visible.
+% *Activity* is a related concept, determining whether or not the |Layer|
+% _should_ be visible. This is used to ensure different |Layer| objects
+% retain correct visibilities whilst setting visibility of |Slice| objects.
+% Visible layers are active, but active layers are not nessecarily visible
+% - they will not be visible if their |Slice| container is not visible.
+%
+% Activity can be thought of as a historical record about the visibility of
+% a |Layer| whilst the containing |Slice| is not visible.
+%
+% *APEX/F Documentation*
+%
+% * <bootstrap.html Architecture and Bootstrapping>
+% * <Viewer.html Viewer>
+% * <Slice.html Slice>
+% * <Layer.html Layer>
+% * <BitmapLayer.html BitmapLayer>
+% * <PointLayer.html PointLayer>
+% * <InterpolationLayer.html InterpolationLayer>
+% 
+%%
+% <<general-arch.png>>
+%
+classdef Layer < handle
+    %% Properties (Private)
+    % *|parent|*: the parent |axes| handle into which an |image| handle
+    % should be created
+    %
+    % *|image|*: |image| handle for displaying data and attaching events to
+    %
+    % *|active|*: |bool| represnting the current activity of the layer.
+    % Note that visibility is determined using |get(obj.image,
+    % 'Visible')| rather than a |bool|
+    %
+    % *|contrast|*: |bool| representing whether a constrast tool is
+    % displayed for this layer
+    %
+    % *|contrast_handle|*: handle to the contrast viewer, if displayed
+    %
+    % *|zoom|*: |bool| representing whether a high-powered zoom is
+    % displayed for this layer
+    %
+    % *|zoom_handle|*: handle to the high-power zoom, if displayed
+    %
+    % *|callbacks|*: callback objects
+    properties (Access = private)
+        parent
+        image
+        active
+        contrast
+        contrast_handle
+        zoom
+        zoom_handle
+        callbacks
+    end
+    
+    methods (Abstract)
+        %% hasDataForCopy (abstract)
+        % Abstract methods that determines if the current slide has data
+        % available for copying. See the <Viewer.html Viewer documentation>
+        % for a general overview.
+        % 
+        % *Returns*
+        %
+        % |has_data|: |bool| determining if the |Layer| has data suitable
+        % for copying
+        has_data = hasDataForCopy(obj);
+        
+        %% getDataForCopy (abstract)
+        % Abstract method for getting data to be copied. See the
+        % <Viewer.html Viewer documentation> for a general overview.
+        %
+        % *Returns*
+        %
+        % |data|: a |cell array| of data to be copied. Target |Layer| can
+        % "handle" the cell array appropriately.
+        data = getDataForCopy(obj);
+        
+        %% setCopyData (abstract)
+        % Assign data from a copy operation. See the <Viewer.html Viewer
+        % documentation> for a general overview.
+        %
+        % *Parameters*
+        %
+        % |data|: the data to be copied
+        setCopyData(obj, data);
+    end
+    
+    methods (Access = public)
+        %% Layer (constuctor)
+        % Instantiate an instance of |Layer|, and creates an |image| handle
+        % into which data is inserted.
+        %
+        % *Parameters*
+        %
+        % |parent|: the parent |axes| of the |image| object
+        function obj = Layer(parent)
+            obj.parent = parent;
+            obj.image = imagesc('Parent', obj.parent, 'Visible', 'off');
+            obj.active = false;
+            obj.contrast = false;
+            obj.zoom = false;
+            obj.contrast_handle = false;
+            obj.zoom_handle = false;
+            obj.callbacks = cell(1, 3);
+        end
+        
+        %% setVisibility
+        % Set the visibility of a |Layer|. Follows the same rules as an
+        % |image| handle.
+        %
+        % *Parameters*
+        %
+        % |visibility|: |char| setting for the |Visible| property of the
+        % |image| object
+        function setVisibility(obj, visibility)
+            fprintf('Setting %s to %s \n', class(obj), visibility)
+            set(obj.image, 'Visible', visibility);
+        end
+        
+        %% getVisibility
+        % Determine the visibility of the current |Layer|.
+        %
+        % *Returns*
+        %
+        % |visibility|: |char| represnting the visibility of the |Layer|.
+        % Either |on| or |off|.
+        function visibility = getVisibility(obj)
+            visibility = get(obj.image, 'Visible');
+        end
+        
+        %% getCData
+        % Return the current CData of the |Layer|.
+        %
+        % *Returns*
+        %
+        % |data|: current CData of the |Layer|
+        function data = getCData(obj)
+            data = get(obj.image, 'CData');
+        end
+        
+        %% getDimensions
+        % Return the |x|*|y| dimensions of the Layer
+        %
+        % *Returns*
+        %
+        % |height|: number of pixels in the |y| dimension
+        %
+        % |width|: number of pixels in the |x| dimension
+        function [width height] = getDimensions(obj)
+            [width height] = size(obj.getCData());
+        end
+        
+        %% setCData
+        % Assign CData for the layer. Follows normal rules for |image|
+        % CData. *Note that only 2-dimensional data is supported. RGB data
+        % is unsupported.*
+        %
+        % *Parameters*
+        %
+        % |data|: 2-dimensional data of CData to be assigned to the
+        % |image|.
+        function setCData(obj, data)
+            set(obj.image, 'CData', data);
+        end
+        
+        %% setAlphaData
+        % Assign AlphaData for the layer. Follows normal rules for image|
+        % AlphaData.
+        %
+        % *Parameters*
+        %
+        % |data|: 2-dimensional data to be assigned to AlphaData of the
+        % |image|.
+        function setAlphaData(obj, data)
+            set(obj.image, 'AlphaData', data);
+        end
+        
+        %% setActive
+        % Assign the |Layer| s activity.
+        %
+        % *Parameters*
+        %
+        % |active|: a |bool| for the activity
+        function setActive(obj, active)
+            obj.active = active;
+        end
+        
+        %% isActive
+        % Query the activity of the |Layer|.
+        %
+        % *Returns*
+        %
+        % |active|: a |bool| represnting the activity of the |Layer|
+        function active = isActive(obj)
+            active = obj.active;
+        end
+        
+        %% setContrastEnabled
+        % Enable or disable the contrast tool for this |Layer|.
+        %
+        % *Parameters*
+        %
+        % |enabled|: |char| (either |on| or |off|) determining the visibility of
+        % the contrast tool.
+        function setContrastEnabled(obj, enabled)
+            if strcmp(enabled, 'on')
+                obj.openContrast();
+            elseif strcmp(enabled, 'off')
+                obj.closeContrast();
+            else
+                throw(MException('LayerException:InvalidContrastSetting:setContrastEnabled', '%s is not a valid contrast option', enabled));
+            end
+        end
+        
+        %% setZoomEnabled
+        % Enable or disable the high-powered zoom tool for this |Layer|.
+        %
+        % *Parameters*
+        %
+        % |enalbed|: |char| (either |on| or |off|) determining the
+        % visibility of the high-powered zoom tool.
+        function setZoomEnabled(obj, enabled)
+            if strcmp(enabled, 'on')
+                obj.openZoom();
+            elseif strcmp(enabled, 'off')
+                obj.closeZoom();
+            else
+                throw(MException('LayerException:InvalidContrastSetting:setZoomEnabled', '%s is not a valid zoom option', enabled));
+            end
+        end
+        
+        %% setButtonDownCallback
+        % Assign a callback to execute upon mouse click within the |image|
+        % object. Executes in the scope of the |Layer| object.
+        %
+        % *Parameters*
+        %
+        % |fcn|: function identifier or anonymous function to attach to the
+        % event
+        function setButtonDownCallback(obj, fcn)
+            function LayerButtonDownPrototype(hObject, eventdata)            
+                points = get(ancestor(hObject, 'axes'), 'CurrentPoint');
+                x = round(points(1, 1));
+                y = round(points(1, 2));
+                
+                fcn(x, y, obj);
+            end
+            
+            set(obj.image, 'ButtonDownFcn', @LayerButtonDownPrototype);
+        end
+        
+        %% setButtonUpCallback
+        % Similar to |Layer.setButtonDownCallback| except fires upon mouse
+        % _up_.
+        %
+        % *Parameters*
+        % |fcn|: function identifier or anonymous function to attach to the
+        % event
+        function setButtonUpCallback(obj, fcn)
+            function LayerButtonUpPrototype(hObject, eventdata)
+                points = get(ancestor(hObject, 'axes'), 'CurrentPoint');
+                x = round(points(1, 1));
+                y = round(points(1, 2));
+                
+                fcn(x, y, obj);
+            end
+            
+            set(obj.image, 'ButtonUpFcn', @LayerButtonUpPrototype);
+        end
+        
+        %% setMouseMotionCallback
+        % Similar to |Layer.setMouseMotionCallback|, except fires upon
+        % mouse drag. *Note that the callback _must_ be removed before
+        % another one is attached to another |Layer| object, and must be
+        % attached to the currently visible |Layer|.*
+        %
+        % *Parameters*
+        %
+        % |fcn|: function handle or anonymous function representing action
+        % to be fired when the mouse is dragged
+        function setMouseMotionCallback(obj, fcn)
+            down = false;
+            
+            % Function prototype o
+            function FigureDown(hObject, eventdata)
+                down = true;
+            end
+            
+            function FigureUp(hObject, eventdata)
+                down = false;
+            end
+            
+            function FigureMotion(hObject, eventdata)
+                if down
+                    points = get(ancestor(obj.parent, 'axes'), 'CurrentPoint');
+                    x = round(points(1, 1));
+                    y = round(points(1, 2));
+                    
+%                     fprintf('This is motion on %i\n', slice_id)
+                    fcn(x, y, obj);
+                end
+            end
+            
+            obj.callbacks{1} = iptaddcallback(ancestor(obj.parent, 'figure'), 'WindowButtonDownFcn', @FigureDown);
+            obj.callbacks{2} = iptaddcallback(ancestor(obj.parent, 'figure'), 'WindowButtonUpFcn', @FigureUp);
+            obj.callbacks{3} = iptaddcallback(ancestor(obj.parent, 'figure'), 'WindowButtonMotionFcn', @FigureMotion);
+        end
+        
+        %% removeMouseMotionCallback
+        % Remove the attached Motion Listener on the |image|.
+        function removeMouseMotionCallback(obj)
+            iptremovecallback(ancestor(obj.parent, 'figure'), 'WindowButtonDownFcn', obj.callbacks{1});
+            iptremovecallback(ancestor(obj.parent, 'figure'), 'WindowButtonUpFcn', obj.callbacks{2});
+            iptremovecallback(ancestor(obj.parent, 'figure'), 'WindowButtonMotionFcn', obj.callbacks{3});
+        end
+        
+        %% removeButtonDownCallback
+        % Remove the Button Down listener.
+        function removeButtonDownCallback(obj)
+            iptremovecallback(obj.image, 'ButtonDownFcn', @LayerButtonDownPrototype);
+        end
+        
+        %% removeButtonUpCallback
+        % Remove the Button Up listener.
+        function removeButtonUpCallback(obj)
+            iptremovecallback(obj.image, 'ButtonUpFcn', @LayerButtonUpPrototype);
+        end
+    end
+    
+    methods (Access = private)
+       
+        %% openConstrast (Private)
+        % Open the contrast tool for the |image|
+        function openContrast(obj)
+            obj.contrast = true;
+            obj.contrast_handle = imcontrast(obj.image);
+        end
+        
+        %% closeContrast (Private)
+        % Close the contrast tool for |image|
+        function closeContrast(obj)
+            obj.contrast = false;
+            delete(obj.contrast_handle);
+            obj.contrast_handle = false;
+        end
+        
+        %% openZoom (Private)
+        % Open high-powered zoom tool for |image|
+        function openZoom(obj)
+            obj.zoom = true;
+            obj.zoom_handle = impixelregion(obj.image);
+        end
+        
+        %% closeZoom (Private)
+        % Close high-powered zoom tool for |image
+        function closeZoom(obj)
+            obj.zoom = false;
+            delete(obj.zoom_handle);
+            obj.zoom_handle = false;
+        end
+    end
+end
+##### SOURCE END #####
+--></body></html>

@@ -1,0 +1,402 @@
+
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+   <!--
+This HTML was auto-generated from MATLAB code.
+To make changes, update the MATLAB code and republish this document.
+      --><title>InterpolationLayer</title><meta name="generator" content="MATLAB 7.12"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2012-07-16"><meta name="DC.source" content="InterpolationLayer.m"><style type="text/css">
+
+body {
+  background-color: white;
+  margin:10px;
+}
+
+h1 {
+  color: #990000; 
+  font-size: x-large;
+}
+
+h2 {
+  color: #990000;
+  font-size: medium;
+}
+
+/* Make the text shrink to fit narrow windows, but not stretch too far in 
+wide windows. */ 
+p,h1,h2,div.content div {
+  max-width: 600px;
+  /* Hack for IE6 */
+  width: auto !important; width: 600px;
+}
+
+pre.codeinput {
+  background: #EEEEEE;
+  padding: 10px;
+}
+@media print {
+  pre.codeinput {word-wrap:break-word; width:100%;}
+} 
+
+span.keyword {color: #0000FF}
+span.comment {color: #228B22}
+span.string {color: #A020F0}
+span.untermstring {color: #B20000}
+span.syscmd {color: #B28C00}
+
+pre.codeoutput {
+  color: #666666;
+  padding: 10px;
+}
+
+pre.error {
+  color: red;
+}
+
+p.footer {
+  text-align: right;
+  font-size: xx-small;
+  font-weight: lighter;
+  font-style: italic;
+  color: gray;
+}
+
+  </style></head><body><div class="content"><h1>InterpolationLayer</h1><!--introduction--><p>An <tt>InterpolationLayer</tt> supports morphological operations upon it, such as dilation and erosion. It is used to display a contigious area, interpolated from a <a href="PointLayer.html"><tt>PointLayer</tt></a>.</p><p><b>APEX/F Documentation</b></p><div><ul><li><a href="bootstrap.html">Architecture and Bootstrapping</a></li><li><a href="Viewer.html">Viewer</a></li><li><a href="Slice.html">Slice</a></li><li><a href="Layer.html">Layer</a></li><li><a href="BitmapLayer.html">BitmapLayer</a></li><li><a href="PointLayer.html">PointLayer</a></li><li><a href="InterpolationLayer.html">InterpolationLayer</a></li><li><a href="InterpolationTechnique.html">InterpolationTechnique</a></li></ul></div><!--/introduction--><h2>Contents</h2><div><ul><li><a href="#2">Properties (Private)</a></li><li><a href="#3">InterpolationLayer (Constructor)</a></li><li><a href="#4">hasDataForCopy (Abstract)</a></li><li><a href="#5">getDataForCopy (Abstract)</a></li><li><a href="#6">setCopyData (Abstract)</a></li><li><a href="#7">importStack</a></li><li><a href="#8">getBoundary</a></li><li><a href="#9">setInterpolation</a></li><li><a href="#10">getInterpolation</a></li><li><a href="#11">drawInterpolation</a></li><li><a href="#12">toggleInterpolationPixel</a></li><li><a href="#13">setStructuringShape</a></li><li><a href="#14">dilate</a></li><li><a href="#15">erode</a></li><li><a href="#16">clear</a></li><li><a href="#18">interpolate</a></li></ul></div><p><img vspace="5" hspace="5" src="general-arch.png" alt=""> </p><pre class="codeinput"><span class="keyword">classdef</span> InterpolationLayer &lt; Layer
+</pre><h2>Properties (Private)<a name="2"></a></h2><p><b><tt>interpolation</tt></b>: the binary mask produced by the interpolation method</p><p><b><tt>boundary</tt></b>: trace of the interpolation . Uses 8-connected with a starting direction of sw (see <tt>bwtraceboundary</tt>)</p><p><b><tt>stack</tt></b>: stack of points (see <a href="PointLayer.html"><tt>PointLayer</tt></a> for more information)</p><p><b><tt>structuring_shape</tt></b>: kernel shape used for dilation and erosion</p><pre class="codeinput">    properties (Access = private)
+        interpolation
+        boundary
+        stack
+        structuring_shape
+    <span class="keyword">end</span>
+
+    methods (Access = public)
+</pre><h2>InterpolationLayer (Constructor)<a name="3"></a></h2><p>Instantantiate an instance of <tt>InterpolationLayer</tt>.</p><pre class="codeinput">        <span class="keyword">function</span> obj = InterpolationLayer(parent)
+            obj = obj@Layer(parent);
+            obj.structuring_shape = <span class="string">'disk'</span>;
+        <span class="keyword">end</span>
+</pre><h2>hasDataForCopy (Abstract)<a name="4"></a></h2><p>See <a href="Layer.html">Layer documentation</a>.</p><pre class="codeinput">        <span class="keyword">function</span> has_data = hasDataForCopy(obj)
+            <span class="keyword">if</span> isempty(obj.stack)
+                has_data = false;
+            <span class="keyword">else</span>
+                has_data = true;
+            <span class="keyword">end</span>
+        <span class="keyword">end</span>
+</pre><h2>getDataForCopy (Abstract)<a name="5"></a></h2><p>See <a href="Layer.html">Layer documentation</a>.</p><pre class="codeinput">        <span class="keyword">function</span> data = getDataForCopy(obj)
+            data = cell(1, 1);
+            data{1} = obj.stack;
+        <span class="keyword">end</span>
+</pre><h2>setCopyData (Abstract)<a name="6"></a></h2><p>See <a href="Layer.html">Layer documentation</a>.</p><pre class="codeinput">        <span class="keyword">function</span> setCopyData(obj, data)
+            obj.importStack(data{1}, 512, 512);
+        <span class="keyword">end</span>
+</pre><h2>importStack<a name="7"></a></h2><p>Create a new interpolation from a stack and draw it to the CData/AlphaData. Creating an interpolation uses <tt>poly2mask</tt>.</p><p><b>Parameters</b></p><p><tt>stack</tt>: the stack to interpolate from. Point order is taken into consideration.</p><p><tt>width</tt> and <tt>height</tt>: width and height of the interpolation mask</p><pre class="codeinput">        <span class="keyword">function</span> importStack(obj, layer, technique)
+            <span class="keyword">if</span> ~ strcmp(class(layer), <span class="string">'PointLayer'</span>)
+                throw(MException());
+            <span class="keyword">end</span>
+
+            <span class="comment">% Grab the stack</span>
+            obj.stack = layer.getStack();
+
+            <span class="comment">% Interpolate</span>
+            obj.setInterpolation(obj.interpolate(technique));
+
+            <span class="comment">% Draw the interpolation</span>
+            obj.drawInterpolation(0.5);
+            obj.setVisibility(<span class="string">'on'</span>);
+        <span class="keyword">end</span>
+</pre><h2>getBoundary<a name="8"></a></h2><p>Trace the boundary of the interpolation from the first nonzero pixel value. Uses a sw default direction and 8-connections.</p><pre class="codeinput">        <span class="keyword">function</span> boundary = getBoundary(obj)
+            [row col] = find(obj.interpolation, 1, <span class="string">'first'</span>);
+            boundary = bwtraceboundary(obj.interpolation, [row col], <span class="string">'sw'</span>);
+        <span class="keyword">end</span>
+</pre><h2>setInterpolation<a name="9"></a></h2><p>Assign a new interpolation.</p><p><b>Parameters</b></p><p><tt>interpolation</tt>: the new interpolation. Must be a (<i>n</i>*<i>m</i>) binary matrix.</p><pre class="codeinput">        <span class="keyword">function</span> setInterpolation(obj, interpolation)
+            obj.interpolation = interpolation;
+        <span class="keyword">end</span>
+</pre><h2>getInterpolation<a name="10"></a></h2><p>Get the current interpolation.</p><p><b>Returns</b></p><p><tt>i</tt>: the current interpolation</p><pre class="codeinput">        <span class="keyword">function</span> i = getInterpolation(obj)
+            i = obj.interpolation;
+        <span class="keyword">end</span>
+</pre><h2>drawInterpolation<a name="11"></a></h2><p>Assign the current interpolation (a binary mask) to CData and AlphaData</p><pre class="codeinput">        <span class="keyword">function</span> drawInterpolation(obj, opacity)
+            obj.setCData(obj.interpolation);
+            obj.setAlphaData(obj.interpolation .* opacity);
+        <span class="keyword">end</span>
+</pre><h2>toggleInterpolationPixel<a name="12"></a></h2><p>To allow for interpolation editing, a toggle is fired when the mouse is clicked.</p><pre class="codeinput">        <span class="keyword">function</span> toggleInterpolationPixel(obj, x, y)
+            <span class="keyword">if</span> obj.interpolation(y, x) == 1
+                obj.interpolation(y, x) = 0;
+            <span class="keyword">else</span>
+                obj.interpolation(y, x) = 1;
+            <span class="keyword">end</span>
+        <span class="keyword">end</span>
+</pre><h2>setStructuringShape<a name="13"></a></h2><p>Assign the structuring kernel for dilation/erosion. See <tt>strel</tt> for details.</p><p><b>Parameters</b></p><p><tt>shape</tt>: <tt>char</tt> determining the structuring shape. See <tt>strel</tt>.</p><pre class="codeinput">        <span class="keyword">function</span> setStructuringShape(obj, shape)
+            <span class="keyword">if</span> ~ isa(shape, <span class="string">'char'</span>)
+                throw(MException(<span class="string">'LayerException:InvalidStructuringElementIdentifier:setStructuringShape'</span>, <span class="string">'%s is not a valid structuring element'</span>, shape));
+            <span class="keyword">end</span>
+
+            obj.structuring_shape = shape;
+        <span class="keyword">end</span>
+</pre><h2>dilate<a name="14"></a></h2><p>Perform the dilation morphological operation. Uses a disk kernel.</p><p><b>Parameters</b></p><p><tt>by</tt>: pixel value to dilate by. Note that 1 is added to this value in order to gain an accurate dilation amount.</p><pre class="codeinput">        <span class="keyword">function</span> dilate(obj, by)
+            <span class="comment">% Set the new interpolation</span>
+<span class="comment">%             obj.interpolation = imdilate(obj.interpolation, ones(by + 2));</span>
+            obj.interpolation = imdilate(obj.interpolation, strel(<span class="string">'disk'</span>, by + 1));
+        <span class="keyword">end</span>
+</pre><h2>erode<a name="15"></a></h2><p>Perform the erosion morphological operation. Uses a disk kernel.</p><p><b>Parameters</b></p><p><tt>by</tt>: pixel value to erode by. Note that 1 is added to this value in order to gain an accurate erosion amount.</p><pre class="codeinput">        <span class="keyword">function</span> erode(obj, by)
+<span class="comment">%             obj.interpolation = imerode(obj.interpolation, ones(by + 2));</span>
+            obj.interpolation = imerode(obj.interpolation, strel(<span class="string">'disk'</span>, by + 1));
+        <span class="keyword">end</span>
+</pre><h2>clear<a name="16"></a></h2><p>Clear all CData, AlphaData, the interpolation and the stack.</p><pre class="codeinput">        <span class="keyword">function</span> clear(obj)
+            obj.setCData(zeros(512));
+            obj.setAlphaData(zeros(512));
+            obj.stack = [];
+            obj.interpolation = [];
+        <span class="keyword">end</span>
+</pre><pre class="codeinput">    <span class="keyword">end</span>
+
+    methods (Access = private)
+</pre><h2>interpolate<a name="18"></a></h2><p>Implements the interpolation function for a number of interpolation techniques, including Poly2Mask</p><pre class="codeinput">	   <span class="comment">%</span>
+	   <span class="comment">% *Parameters*</span>
+	   <span class="comment">%</span>
+	   <span class="comment">% |technique|: |InterpolationTechnique| is a custom type (enum)</span>
+	   <span class="comment">% specifying the technique to use. The default techniques are:</span>
+	   <span class="comment">%</span>
+	   <span class="comment">% * |Poly2Mask2|: use the MATLAB |poly2mask| function. This has the</span>
+	   <span class="comment">% advantage that</span>
+	   <span class="comment">%</span>
+	   <span class="comment">% *Returns*</span>
+	   <span class="comment">%</span>
+	   <span class="comment">%</span>
+       <span class="keyword">function</span> i = interpolate(obj, technique)
+           <span class="keyword">switch</span> technique
+               <span class="keyword">case</span> InterpolationTechnique.Poly2Mask
+                   [width height] = obj.getDimensions();
+                   i = poly2mask(obj.stack(:, 1), obj.stack(:, 2), width, height);
+
+               <span class="keyword">otherwise</span>
+                   throw(MException());
+           <span class="keyword">end</span>
+       <span class="keyword">end</span>
+</pre><pre class="codeinput">    <span class="keyword">end</span>
+</pre><pre class="codeinput"><span class="keyword">end</span>
+</pre><p class="footer"><br>
+      Published with MATLAB&reg; 7.12<br></p></div><!--
+##### SOURCE BEGIN #####
+%% InterpolationLayer
+% An |InterpolationLayer| supports morphological operations upon it, such
+% as dilation and erosion. It is used to display a contigious area,
+% interpolated from a <PointLayer.html |PointLayer|>.
+%
+% *APEX/F Documentation*
+%
+% * <bootstrap.html Architecture and Bootstrapping>
+% * <Viewer.html Viewer>
+% * <Slice.html Slice>
+% * <Layer.html Layer>
+% * <BitmapLayer.html BitmapLayer>
+% * <PointLayer.html PointLayer>
+% * <InterpolationLayer.html InterpolationLayer>
+% * <InterpolationTechnique.html InterpolationTechnique>
+% 
+%%
+% <<general-arch.png>>
+%
+classdef InterpolationLayer < Layer
+    %% Properties (Private)
+    % *|interpolation|*: the binary mask produced by the interpolation
+    % method
+    %
+    % *|boundary|*: trace of the interpolation . Uses 8-connected with a
+    % starting direction of sw (see |bwtraceboundary|)
+    %
+    % *|stack|*: stack of points (see <PointLayer.html |PointLayer|> for
+    % more information)
+    %
+    % *|structuring_shape|*: kernel shape used for dilation and erosion
+    properties (Access = private)
+        interpolation
+        boundary
+        stack
+        structuring_shape
+    end
+    
+    methods (Access = public)
+        %% InterpolationLayer (Constructor)
+        % Instantantiate an instance of |InterpolationLayer|.
+        function obj = InterpolationLayer(parent)
+            obj = obj@Layer(parent);
+            obj.structuring_shape = 'disk';
+        end
+        
+        %% hasDataForCopy (Abstract)
+        % See <Layer.html Layer documentation>.
+        function has_data = hasDataForCopy(obj)
+            if isempty(obj.stack)
+                has_data = false;
+            else
+                has_data = true;
+            end
+        end
+        
+        %% getDataForCopy (Abstract)
+        % See <Layer.html Layer documentation>.
+        function data = getDataForCopy(obj)
+            data = cell(1, 1);
+            data{1} = obj.stack;
+        end
+        
+        %% setCopyData (Abstract)
+        % See <Layer.html Layer documentation>.
+        function setCopyData(obj, data)
+            obj.importStack(data{1}, 512, 512);
+        end
+        
+        %% importStack
+        % Create a new interpolation from a stack and draw it to the
+        % CData/AlphaData. Creating an interpolation uses |poly2mask|.
+        %
+        % *Parameters*
+        %
+        % |stack|: the stack to interpolate from. Point order is taken into
+        % consideration.
+        %
+        % |width| and |height|: width and height of the interpolation mask
+        function importStack(obj, layer, technique)
+            if ~ strcmp(class(layer), 'PointLayer')
+                throw(MException());
+            end
+            
+            % Grab the stack
+            obj.stack = layer.getStack();
+            
+            % Interpolate
+            obj.setInterpolation(obj.interpolate(technique));
+            
+            % Draw the interpolation
+            obj.drawInterpolation(0.5);
+            obj.setVisibility('on');
+        end
+        
+        %% getBoundary
+        % Trace the boundary of the interpolation from the first nonzero
+        % pixel value. Uses a sw default direction and 8-connections.
+        function boundary = getBoundary(obj)
+            [row col] = find(obj.interpolation, 1, 'first');            
+            boundary = bwtraceboundary(obj.interpolation, [row col], 'sw');
+        end
+        
+        %% setInterpolation
+        % Assign a new interpolation.
+        %
+        % *Parameters*
+        %
+        % |interpolation|: the new interpolation. Must be a (_n_*_m_)
+        % binary matrix.
+        function setInterpolation(obj, interpolation)
+            obj.interpolation = interpolation;
+        end
+        
+        %% getInterpolation
+        % Get the current interpolation.
+        %
+        % *Returns*
+        %
+        % |i|: the current interpolation
+        function i = getInterpolation(obj)
+            i = obj.interpolation;
+        end
+        
+        %% drawInterpolation
+        % Assign the current interpolation (a binary mask) to CData and
+        % AlphaData
+        function drawInterpolation(obj, opacity)
+            obj.setCData(obj.interpolation);
+            obj.setAlphaData(obj.interpolation .* opacity);
+        end
+        
+        %% toggleInterpolationPixel
+        % To allow for interpolation editing, a toggle is fired when the
+        % mouse is clicked.
+        function toggleInterpolationPixel(obj, x, y)
+            if obj.interpolation(y, x) == 1
+                obj.interpolation(y, x) = 0;
+            else
+                obj.interpolation(y, x) = 1;
+            end
+        end
+        
+        %% setStructuringShape
+        % Assign the structuring kernel for dilation/erosion. See |strel|
+        % for details.
+        %
+        % *Parameters*
+        %
+        % |shape|: |char| determining the structuring shape. See |strel|.
+        function setStructuringShape(obj, shape)
+            if ~ isa(shape, 'char')
+                throw(MException('LayerException:InvalidStructuringElementIdentifier:setStructuringShape', '%s is not a valid structuring element', shape));
+            end
+            
+            obj.structuring_shape = shape;
+        end
+        
+        %% dilate
+        % Perform the dilation morphological operation. Uses a disk kernel.
+        %
+        % *Parameters*
+        %
+        % |by|: pixel value to dilate by. Note that 1 is added to this
+        % value in order to gain an accurate dilation amount.
+        function dilate(obj, by)
+            % Set the new interpolation
+%             obj.interpolation = imdilate(obj.interpolation, ones(by + 2));
+            obj.interpolation = imdilate(obj.interpolation, strel('disk', by + 1));
+        end
+        
+        %% erode
+        % Perform the erosion morphological operation. Uses a disk kernel.
+        %
+        % *Parameters*
+        %
+        % |by|: pixel value to erode by. Note that 1 is added to this
+        % value in order to gain an accurate erosion amount.
+        function erode(obj, by)
+%             obj.interpolation = imerode(obj.interpolation, ones(by + 2));
+            obj.interpolation = imerode(obj.interpolation, strel('disk', by + 1));
+        end
+        
+        %% clear
+        % Clear all CData, AlphaData, the interpolation and the stack.
+        function clear(obj)
+            obj.setCData(zeros(512));
+            obj.setAlphaData(zeros(512));
+            obj.stack = [];
+            obj.interpolation = [];
+        end
+    end
+    
+    methods (Access = private)
+       %% interpolate
+       % Implements the interpolation function for a number of
+       % interpolation techniques, including Poly2Mask
+	   %
+	   % *Parameters*
+	   %
+	   % |technique|: |InterpolationTechnique| is a custom type (enum)
+	   % specifying the technique to use. The default techniques are:
+	   %
+	   % * |Poly2Mask2|: use the MATLAB |poly2mask| function. This has the
+	   % advantage that 
+	   %
+	   % *Returns*
+	   %
+	   %
+       function i = interpolate(obj, technique)
+           switch technique
+               case InterpolationTechnique.Poly2Mask
+                   [width height] = obj.getDimensions();
+                   i = poly2mask(obj.stack(:, 1), obj.stack(:, 2), width, height);
+               
+               otherwise
+                   throw(MException());
+           end
+       end
+    end
+end
+##### SOURCE END #####
+--></body></html>

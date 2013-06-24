@@ -1,0 +1,242 @@
+
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+   <!--
+This HTML was auto-generated from MATLAB code.
+To make changes, update the MATLAB code and republish this document.
+      --><title>BitmapLayer</title><meta name="generator" content="MATLAB 7.12"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2012-05-20"><meta name="DC.source" content="BitmapLayer.m"><style type="text/css">
+
+body {
+  background-color: white;
+  margin:10px;
+}
+
+h1 {
+  color: #990000; 
+  font-size: x-large;
+}
+
+h2 {
+  color: #990000;
+  font-size: medium;
+}
+
+/* Make the text shrink to fit narrow windows, but not stretch too far in 
+wide windows. */ 
+p,h1,h2,div.content div {
+  max-width: 600px;
+  /* Hack for IE6 */
+  width: auto !important; width: 600px;
+}
+
+pre.codeinput {
+  background: #EEEEEE;
+  padding: 10px;
+}
+@media print {
+  pre.codeinput {word-wrap:break-word; width:100%;}
+} 
+
+span.keyword {color: #0000FF}
+span.comment {color: #228B22}
+span.string {color: #A020F0}
+span.untermstring {color: #B20000}
+span.syscmd {color: #B28C00}
+
+pre.codeoutput {
+  color: #666666;
+  padding: 10px;
+}
+
+pre.error {
+  color: red;
+}
+
+p.footer {
+  text-align: right;
+  font-size: xx-small;
+  font-weight: lighter;
+  font-style: italic;
+  color: gray;
+}
+
+  </style></head><body><div class="content"><h1>BitmapLayer</h1><!--introduction--><p>A <tt>BitmapLayer</tt> is an abstraction for a bitmapped image, such as CT scan data. It also provides methods appropriate for a bitmapped image, such as <tt>partition</tt>.</p><p><b>APEX/F Documentation</b></p><div><ul><li><a href="bootstrap.html">Architecture and Bootstrapping</a></li><li><a href="Viewer.html">Viewer</a></li><li><a href="Slice.html">Slice</a></li><li><a href="Layer.html">Layer</a></li><li><a href="BitmapLayer.html">BitmapLayer</a></li><li><a href="PointLayer.html">PointLayer</a></li><li><a href="InterpolationLayer.html">InterpolationLayer</a></li></ul></div><!--/introduction--><h2>Contents</h2><div><ul><li><a href="#2">Properties (Private)</a></li><li><a href="#3">BitmapLayer (Constructor)</a></li><li><a href="#4">hasDataForCopy</a></li><li><a href="#5">getDataForCopy</a></li><li><a href="#6">setCopyData</a></li><li><a href="#7">setThreshold</a></li><li><a href="#8">setMinimumPixels</a></li><li><a href="#9">findMaximumInternalRectangle</a></li><li><a href="#10">partition</a></li></ul></div><p><img vspace="5" hspace="5" src="general-arch.png" alt=""> </p><pre class="codeinput"><span class="keyword">classdef</span> BitmapLayer &lt; Layer
+</pre><h2>Properties (Private)<a name="2"></a></h2><p><b><tt>level</tt></b>: the threshold for converting the image to a binary mask</p><p><b><tt>min_pixels</tt></b>: minimum pixel count for objects to be kept (see <tt>bwareaopen</tt>)</p><pre class="codeinput">    properties (Access = private)
+        level
+        min_pixels
+    <span class="keyword">end</span>
+
+    methods (Access = public)
+</pre><h2>BitmapLayer (Constructor)<a name="3"></a></h2><p>Instantiate an instance of <tt>BitmapLayer</tt>.</p><pre class="codeinput">        <span class="keyword">function</span> obj = BitmapLayer(parent)
+            obj = obj@Layer(parent);
+
+            <span class="comment">% Set mask configuration</span>
+            obj.level = 0.011;
+            obj.min_pixels = 100;
+        <span class="keyword">end</span>
+</pre><h2>hasDataForCopy<a name="4"></a></h2><p>See <a href="Layer.html">Layer documentation</a>.</p><pre class="codeinput">        <span class="keyword">function</span> has_data = hasDataForCopy(obj)
+            has_data = true;
+        <span class="keyword">end</span>
+</pre><h2>getDataForCopy<a name="5"></a></h2><p>See <a href="Layer.html">Layer documentation</a>.</p><pre class="codeinput">        <span class="keyword">function</span> data = getDataForCopy(obj)
+            data = cell(1, 1);
+            data{1} = obj.getCData();
+        <span class="keyword">end</span>
+</pre><h2>setCopyData<a name="6"></a></h2><p>See <a href="Layer.html">Layer documentation</a>.</p><pre class="codeinput">        <span class="keyword">function</span> setCopyData(obj, data)
+            obj.setCData(data{1});
+        <span class="keyword">end</span>
+</pre><h2>setThreshold<a name="7"></a></h2><p>Set threshold value for convering the image (CData) to a binary mask for finding the maximum internal rectangle.</p><p><b>Parameters</b></p><p><tt>threshold</tt>: threshold for converting the bitmap to a masl</p><pre class="codeinput">        <span class="keyword">function</span> setThreshold(obj, threshold)
+            obj.level = threshold;
+        <span class="keyword">end</span>
+</pre><h2>setMinimumPixels<a name="8"></a></h2><p>Set the minimum pixels in an object. Any objects with pixel counts below this value will be removed.</p><p><b>Parameters</b></p><p><tt>pixels</tt>: minimum number of pixels in an object.</p><pre class="codeinput">        <span class="keyword">function</span> setMinimumPixels(obj, pixels)
+            obj.min_pixels = pixels;
+        <span class="keyword">end</span>
+</pre><h2>findMaximumInternalRectangle<a name="9"></a></h2><p>Find the maximum internal rectangle of the bitmap mask. The mask is generated using the threshold value, the default value is suitable for CT scan data.</p><p><b>Returns</b></p><p><tt>x</tt>: x co-ordinate in pixels</p><p><tt>y</tt>: y co-ordinate in pixels</p><p><tt>width</tt>: width of the rectangle in pixels</p><p><tt>height</tt>: height of the rectangle in pixels</p><pre class="codeinput">        <span class="keyword">function</span> [x y width height] = findMaximumInternalRectangle(obj)
+            <span class="comment">% Clean the mask</span>
+            half = im2b2(onj.getCData(), obj.level);
+            cleaned = bwareaopen(half, obj.min_pixels);
+            mask = imfill(cleaned, <span class="string">'holes'</span>);
+
+            <span class="comment">% Find the maximum internal rectangle</span>
+            [C W H] = FindLargestRectangles(mask);
+            [tmp pos] = max(C(:));
+            [r c] = ind2sub(size(C), pos);
+
+            <span class="comment">% Return values</span>
+            x = c;
+            y = r;
+            width = W(r, c);
+            height = H(r, c);
+        <span class="keyword">end</span>
+</pre><h2>partition<a name="10"></a></h2><p>Use the HV decomposition technique in order to partition the image. <b>Not yet implemented.</b></p><pre class="codeinput">        <span class="keyword">function</span> partition(obj)
+
+        <span class="keyword">end</span>
+</pre><pre class="codeinput">    <span class="keyword">end</span>
+</pre><pre class="codeinput"><span class="keyword">end</span>
+</pre><p class="footer"><br>
+      Published with MATLAB&reg; 7.12<br></p></div><!--
+##### SOURCE BEGIN #####
+%% BitmapLayer
+% A |BitmapLayer| is an abstraction for a bitmapped image, such as CT scan
+% data. It also provides methods appropriate for a bitmapped image, such as
+% |partition|.
+%
+% *APEX/F Documentation*
+%
+% * <bootstrap.html Architecture and Bootstrapping>
+% * <Viewer.html Viewer>
+% * <Slice.html Slice>
+% * <Layer.html Layer>
+% * <BitmapLayer.html BitmapLayer>
+% * <PointLayer.html PointLayer>
+% * <InterpolationLayer.html InterpolationLayer>
+% 
+%%
+% <<general-arch.png>>
+%
+classdef BitmapLayer < Layer
+    %% Properties (Private)
+    % *|level|*: the threshold for converting the image to a binary mask
+    %
+    % *|min_pixels|*: minimum pixel count for objects to be kept (see
+    % |bwareaopen|)
+    properties (Access = private)
+        level
+        min_pixels
+    end
+    
+    methods (Access = public)
+        %% BitmapLayer (Constructor)
+        % Instantiate an instance of |BitmapLayer|.
+        function obj = BitmapLayer(parent)
+            obj = obj@Layer(parent);
+            
+            % Set mask configuration
+            obj.level = 0.011;
+            obj.min_pixels = 100;
+        end
+        
+        %% hasDataForCopy
+        % See <Layer.html Layer documentation>.
+        function has_data = hasDataForCopy(obj)
+            has_data = true;
+        end
+        
+        %% getDataForCopy
+        % See <Layer.html Layer documentation>.
+        function data = getDataForCopy(obj)
+            data = cell(1, 1);
+            data{1} = obj.getCData();
+        end
+        
+        %% setCopyData
+        % See <Layer.html Layer documentation>.
+        function setCopyData(obj, data)
+            obj.setCData(data{1});
+        end
+        
+        %% setThreshold
+        % Set threshold value for convering the image (CData) to a binary
+        % mask for finding the maximum internal rectangle.
+        %
+        % *Parameters*
+        %
+        % |threshold|: threshold for converting the bitmap to a masl
+        function setThreshold(obj, threshold)
+            obj.level = threshold;
+        end
+        
+        %% setMinimumPixels
+        % Set the minimum pixels in an object. Any objects with pixel
+        % counts below this value will be removed.
+        %
+        % *Parameters*
+        %
+        % |pixels|: minimum number of pixels in an object.
+        function setMinimumPixels(obj, pixels)
+            obj.min_pixels = pixels;
+        end
+        
+        %% findMaximumInternalRectangle
+        % Find the maximum internal rectangle of the bitmap mask. The mask
+        % is generated using the threshold value, the default value is
+        % suitable for CT scan data.
+        %
+        % *Returns*
+        %
+        % |x|: x co-ordinate in pixels
+        %
+        % |y|: y co-ordinate in pixels
+        %
+        % |width|: width of the rectangle in pixels
+        %
+        % |height|: height of the rectangle in pixels
+        function [x y width height] = findMaximumInternalRectangle(obj)
+            % Clean the mask
+            half = im2b2(onj.getCData(), obj.level);
+            cleaned = bwareaopen(half, obj.min_pixels);
+            mask = imfill(cleaned, 'holes');
+            
+            % Find the maximum internal rectangle
+            [C W H] = FindLargestRectangles(mask);
+            [tmp pos] = max(C(:));
+            [r c] = ind2sub(size(C), pos);
+            
+            % Return values
+            x = c;
+            y = r;
+            width = W(r, c);
+            height = H(r, c);
+        end
+        
+        %% partition
+        % Use the HV decomposition technique in order to partition the
+        % image. *Not yet implemented.*
+        function partition(obj)
+            
+        end
+    end
+end
+##### SOURCE END #####
+--></body></html>

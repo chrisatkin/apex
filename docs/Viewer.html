@@ -1,0 +1,919 @@
+
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+   <!--
+This HTML was auto-generated from MATLAB code.
+To make changes, update the MATLAB code and republish this document.
+      --><title>Viewer</title><meta name="generator" content="MATLAB 7.12"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2012-05-21"><meta name="DC.source" content="Viewer.m"><style type="text/css">
+
+body {
+  background-color: white;
+  margin:10px;
+}
+
+h1 {
+  color: #990000; 
+  font-size: x-large;
+}
+
+h2 {
+  color: #990000;
+  font-size: medium;
+}
+
+/* Make the text shrink to fit narrow windows, but not stretch too far in 
+wide windows. */ 
+p,h1,h2,div.content div {
+  max-width: 600px;
+  /* Hack for IE6 */
+  width: auto !important; width: 600px;
+}
+
+pre.codeinput {
+  background: #EEEEEE;
+  padding: 10px;
+}
+@media print {
+  pre.codeinput {word-wrap:break-word; width:100%;}
+} 
+
+span.keyword {color: #0000FF}
+span.comment {color: #228B22}
+span.string {color: #A020F0}
+span.untermstring {color: #B20000}
+span.syscmd {color: #B28C00}
+
+pre.codeoutput {
+  color: #666666;
+  padding: 10px;
+}
+
+pre.error {
+  color: red;
+}
+
+p.footer {
+  text-align: right;
+  font-size: xx-small;
+  font-weight: lighter;
+  font-style: italic;
+  color: gray;
+}
+
+  </style></head><body><div class="content"><h1>Viewer</h1><!--introduction--><p>A <tt>Viewer</tt> class is the highest level abstraction in the system. It is an abstraction for multiple <tt>Slice</tt> s. The philosophy is that the user should issue commands to <tt>Viewer</tt> classes, which then performs the tasks on behalf of the users. Usually, these are high-level operations (such as copy and paste), and any additional non-trivial functionality should be added by adding an appropriate method within <tt>Viewer</tt>. <i>However</i>, because of the nature of <tt>Viewer</tt>, most of the functionality provided is routing to the appropriate <tt>Layer</tt>. Still, <tt>Viewer</tt> is an important abstraction within the APEX graphical stack.</p><p><tt>Viewer</tt> contains multiple Slices, which are stored as a <tt>struct()</tt> identified by <tt>obj.Handles</tt> (notice the importance of the capital 'H'). Instantiating a <tt>Viewer</tt> will create an <tt>axes</tt> object and some associated graphical elements.</p><!--/introduction--><h2>Contents</h2><div><ul><li><a href="#1">Copy and Pasting</a></li><li><a href="#2">Properties (Private)</a></li><li><a href="#3">Viewer (constructor)</a></li><li><a href="#4">setSize (unused)</a></li><li><a href="#5">assignSlice</a></li><li><a href="#6">assignLayer</a></li><li><a href="#7">addSliceButtonDownListener</a></li><li><a href="#8">addSliceButtonUpListener</a></li><li><a href="#9">addSliceButtonMotionListener</a></li><li><a href="#10">removeSliceButtonMotionListener</a></li><li><a href="#11">setLayerCData</a></li><li><a href="#12">setLayerAlphaData</a></li><li><a href="#13">setLayerVisible</a></li><li><a href="#14">setLayerActive</a></li><li><a href="#15">setSliceVisibility</a></li><li><a href="#16">getVisibleSlice</a></li><li><a href="#17">getLayerVisibility</a></li><li><a href="#18">displayInterpolation</a></li><li><a href="#19">dilateLayerSelection</a></li><li><a href="#20">erodeLayerSelection</a></li><li><a href="#21">each</a></li><li><a href="#22">setContrastEnabled</a></li><li><a href="#23">setContrastEnabled</a></li><li><a href="#24">setCopySlice</a></li><li><a href="#25">triggerPaste</a></li><li><a href="#26">undoLastClick</a></li><li><a href="#27">clearLayer</a></li><li><a href="#29">checkSliceExists</a></li></ul></div><h2>Copy and Pasting<a name="1"></a></h2><p>The copy and pasting mechanism appears complicated, and yet is rather simple.</p><p>Within <tt>Viewer</tt>, the <tt>copy_slice</tt> property contains the ID of the slice to be copied. When the triggerPaste methods is called, <tt>Viewer</tt> delegates to <tt>Slice.copyFromSlice</tt>, whilst passing the <tt>Slice</tt> to be copied from - this is the copy slice (CS).</p><p><tt>Layer</tt> defines three abstract methods, <tt>hasDataForCopy</tt>, <tt>getDataForCopy</tt> and <tt>setCopyData</tt>. These methods must be implemented on each of the <tt>Layer</tt> subclasses (<tt>BitmapLayer</tt>, <tt>PointLayer</tt> and <tt>InterpolationLayer</tt>).</p><pre>methods (Abstract)
+   has_data = hasDataForCopy(obj);
+   data = getDataForCopy(obj);
+   setCopyData(obj, data);
+end</pre><p>If the CS returns true for <tt>hasCopyData</tt>, then <tt>getDataForCopy</tt> is called. The result of this is called to <tt>setCopyData</tt> on the target layer. Because each layer type implements these methods, the data is correctly assigned.</p><p><b>APEX/F Documentation</b></p><div><ul><li><a href="bootstrap.html">Architecture and Bootstrapping</a></li><li><a href="Viewer.html">Viewer</a></li><li><a href="Slice.html">Slice</a></li><li><a href="Layer.html">Layer</a></li><li><a href="BitmapLayer.html">BitmapLayer</a></li><li><a href="PointLayer.html">PointLayer</a></li><li><a href="InterpolationLayer.html">InterpolationLayer</a></li></ul></div><p><img vspace="5" hspace="5" src="general-arch.png" alt=""> </p><pre class="codeinput"><span class="keyword">classdef</span> Viewer &lt; handle
+</pre><h2>Properties (Private)<a name="2"></a></h2><p><b><tt>parent</tt></b>: the parent figure to which a Viewer should be attached. An <tt>axes</tt> will be created within <tt>parent</tt>.</p><p><b><tt>active_slice</tt></b>: the <tt>Slice</tt> that is currently visible.</p><p><b><tt>copy_slice</tt></b>: the slice to which the data is to be copied from. The copy and paste system will be explained further within this document.</p><p><b><tt>Handles</tt></b>: a <tt>struct()</tt> containing Handles. <tt>Handles.slices</tt> contains <tt>Slice</tt> objects.</p><pre class="codeinput">    properties (Access = private)
+        parent
+        active_slice
+        copy_slice
+        Handles
+    <span class="keyword">end</span>
+
+    methods (Access = public)
+</pre><h2>Viewer (constructor)<a name="3"></a></h2><p>Instantiate an instance of <tt>Viewer</tt>. Some graphical elements will also be created, such as a <tt>uipanel</tt>. The details of the <tt>uipanel</tt> are abstracted away from the user. The colormap of the <tt>axes</tt> will also be set to <b>bone</b> (because this map is the most appropriate for CT scan data).</p><p><b>Parameters</b></p><p><tt>parent</tt>: figure handle in which to place the Viewer.</p><pre class="codeinput">        <span class="keyword">function</span> obj = Viewer(parent)
+            obj.parent = parent;
+
+            <span class="comment">% Create GUI elements</span>
+            obj.Handles.panel = uipanel(<span class="string">'Parent'</span>, obj.parent);
+            obj.Handles.axis = axes(<span class="string">'Parent'</span>, obj.Handles.panel, <span class="keyword">...</span>
+                                    <span class="string">'YDir'</span>, <span class="string">'reverse'</span>, <span class="keyword">...</span>
+                                    <span class="string">'Units'</span>, <span class="string">'pixels'</span>);
+
+            obj.Handles.slices = struct();
+            obj.active_slice = 1;
+            obj.copy_slice = false;
+
+            <span class="comment">% Change properties of the</span>
+<span class="comment">%             hold(obj.Handles.axis, 'on');</span>
+            colormap(obj.Handles.axis, <span class="string">'bone'</span>);
+        <span class="keyword">end</span>
+</pre><h2>setSize (unused)<a name="4"></a></h2><p>Change the size of the <tt>uipanel</tt>.</p><p><b>Parameters</b></p><p><tt>dims</tt>: 1*4 matrix containing <tt>[left bottom width height]</tt> values. Remembers that the bottom left hand corner of the figure is (0, 0).</p><pre class="codeinput">        <span class="keyword">function</span> setSize(obj, dims)
+            set(obj.Handles.panel, <span class="string">'Position'</span>, dims);
+        <span class="keyword">end</span>
+</pre><h2>assignSlice<a name="5"></a></h2><p>Create a new slice and add it to the <tt>Viewer</tt>. The order of creation <b>is</b> important, although somewhat insignificant until <tt>Layer</tt> s are added to the slice. Slices cannot be re-ordered after assignment.</p><p><b>Parameters</b></p><p><tt>id</tt>: the identifier of the newly created <tt>Slice</tt>.</p><pre class="codeinput">        <span class="keyword">function</span> assignSlice(obj, id)
+            <span class="keyword">if</span> obj.checkSliceExists(id)
+                throw(MException(<span class="string">'ViewerException:sliceExists:assignSlice'</span>, <span class="string">'Slice %s already exists'</span>, id));
+            <span class="keyword">end</span>
+
+            obj.Handles.slices.([<span class="string">'slice'</span>, num2str(id)]) = Slice(obj.Handles.axis, id);
+        <span class="keyword">end</span>
+</pre><h2>assignLayer<a name="6"></a></h2><p>Create a new <tt>Layer</tt> (with a name and kind). Data assignments to the <tt>Layer</tt> are performed with separate methods to avoid duplication of effort.</p><p><b>Parameters</b></p><p><tt>slice_id</tt>: the ID of the <tt>Slice</tt> in which to create the <tt>Layer</tt></p><p><tt>layer_name</tt>: the string identifier of the <tt>Layer</tt></p><p><tt>layer_kind</tt>: the type of the layer created. Must be one of:</p><div><ul><li><tt>Bitmap</tt></li><li><tt>Point</tt></li><li><tt>Interpolation</tt></li></ul></div><p>If this is not the case, a <tt>SliceException</tt> is thrown.</p><p>Different types of <tt>Layer</tt> are described in the <a href="Layer.html">appropriate documentation</a>.</p><pre class="codeinput">        <span class="keyword">function</span> assignLayer(obj, slice_id, layer_name, layer_kind)
+            <span class="keyword">if</span> ~ obj.checkSliceExists(slice_id)
+                throw(MException(<span class="string">'ViewerException:sliceNotExist:assignLayer'</span>, <span class="string">'%s is not a valid slice identifier'</span>, slice_id));
+            <span class="keyword">end</span>
+
+            obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice_id)]).assignLayer(layer_kind, layer_name);
+        <span class="keyword">end</span>
+</pre><h2>addSliceButtonDownListener<a name="7"></a></h2><p>Assign a callback to execute upon mouse <b>click</b> (<i>not</i> dragging!). The callback will execute in the scope of the <tt>Layer</tt> object. Further documentation on this mechanism can be found within the <a href="Layer.html">Layer documentation</a>.</p><p><b>Parameters</b></p><p><tt>slice</tt>: ID of the slice within which <tt>layer</tt> exists</p><p><tt>layer</tt>: string identifier of the layer to which to attach the callback</p><p><tt>fcn</tt>: function identifier or anonymous function to attach to the event</p><pre class="codeinput">        <span class="keyword">function</span> addSliceButtonDownListener(obj, slice, layer, fcn)
+            <span class="keyword">if</span> ~ obj.checkSliceExists(slice)
+                throw(MException(<span class="string">'ViewerException:sliceNotExist:addsliceButtonDownListener'</span>, <span class="string">'%s is not a valid slice identifier'</span>, slice));
+            <span class="keyword">end</span>
+
+            obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice)]).addLayerButtonDownListener(layer, fcn);
+        <span class="keyword">end</span>
+</pre><h2>addSliceButtonUpListener<a name="8"></a></h2><p>Similar to <tt>Viewer.addSliceButtonDownListener</tt>, except fires upon mouse <i>up</i>.</p><p><b>Parameters</b></p><p><tt>slice</tt>: ID of the slice within which <tt>layer</tt> exists</p><p><tt>layer</tt>: string identifier of the layer to which to attach the callback</p><p><tt>fcn</tt>: function identifier or anonymous function to attach to the event</p><pre class="codeinput">        <span class="keyword">function</span> addSliceButtonUpListener(obj, slice, layer, fcn)
+            <span class="keyword">if</span> ~ obj.checkSliceExists(slice)
+                throw(MException(<span class="string">'ViewerException:sliceNotExist:addsliceButtonUpListener'</span>, <span class="string">'%s is not a valid slice identifier'</span>, slice));
+            <span class="keyword">end</span>
+
+            obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice)]).addLayerButtonUpListener(layer, fcn);
+        <span class="keyword">end</span>
+</pre><h2>addSliceButtonMotionListener<a name="9"></a></h2><p>Similar to <tt>Viewer.addSliceButtonDownListener</tt> and <tt>Viewer.addSliceButtonUpListener</tt>, except fires upon mouse drag. <b>Note that only one Motion Listener should be attached at any given time. This is due to a limiation within MATLABs listener architecture  whereby a listener is attached to a <tt>figure</tt> and not an <tt>image</tt>, like in Button Listeners</b>.</p><p><b>Parameters</b></p><p><tt>slice</tt>: ID of the slice within which <tt>layer</tt> exists</p><p><tt>layer</tt>: string identifier of the layer to which to attach the callback</p><p><tt>fcn</tt>: function identifier or anonymous function to attach to the event</p><pre class="codeinput">        <span class="keyword">function</span> addSliceButtonMotionListener(obj, slice, layer, fcn)
+            <span class="keyword">if</span> ~ obj.checkSliceExists(slice)
+                throw(MException(<span class="string">'ViewerException:sliceNotExist:addSliceButtonMotionListener'</span>, <span class="string">'%s is not a valid slice identifier'</span>, slice));
+            <span class="keyword">end</span>
+
+            obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice)]).addLayerButtonMotionListener(layer, fcn);
+        <span class="keyword">end</span>
+</pre><h2>removeSliceButtonMotionListener<a name="10"></a></h2><p>Removes a Motion Listener from the identified slice.</p><p><b>Parameters</b></p><p><tt>slice</tt>: ID of the slice within which <tt>layer</tt> exists</p><p><tt>layer</tt>: string identifier of the layer to which to attach the callback</p><pre class="codeinput">        <span class="keyword">function</span> removeSliceButtonMotionListener(obj, slice, layer)
+            <span class="keyword">if</span> ~ obj.checkSliceExists(slice)
+                throw(MException(<span class="string">'ViewerException:sliceNotExist:removeSliceButtonMotionListener'</span>, <span class="string">'%s is not a valid slice identifier'</span>, slice));
+            <span class="keyword">end</span>
+
+            obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice)]).removeLayerButtonMotionListener(layer);
+        <span class="keyword">end</span>
+</pre><h2>setLayerCData<a name="11"></a></h2><p>Sets the CData for a given <tt>Layer</tt>.</p><p><b>Parameters</b></p><p><tt>slice</tt>: ID of the slice within which <tt>layer</tt> exists</p><p><tt>layer</tt>: string identifier of the layer to which to attach the callback</p><p><tt>data</tt>: 2-dimensional (<tt>n*m</tt>) data to be applied. Follows normal rules for CData.</p><pre class="codeinput">        <span class="keyword">function</span> setLayerCData(obj, slice, layer, data)
+            <span class="keyword">if</span> ~ obj.checkSliceExists(slice)
+                throw(MException(<span class="string">'ViewerException:sliceNotExist:setSliceCData'</span>, <span class="string">'%s is not a valid slice identifier'</span>, slice));
+            <span class="keyword">end</span>
+
+            obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice)]).setLayerCData(layer, data);
+        <span class="keyword">end</span>
+</pre><h2>setLayerAlphaData<a name="12"></a></h2><p>Sets the AlphaData for a given <tt>Layer</tt>.</p><p><b>Parameters</b></p><p><tt>slice</tt>: ID of the slice within which <tt>layer</tt> exists</p><p><tt>layer</tt>: string identifier of the layer to which to attach the callback</p><p><tt>data</tt>: 2-dimensional (<tt>n*m</tt>) data to be applied. Follows normal rules for AlphaData. Should be a binary image.</p><pre class="codeinput">        <span class="keyword">function</span> setLayerAlphaData(obj, slice, layer, data)
+            <span class="keyword">if</span> ~ obj.checkSliceExists(slice)
+                throw(MException(<span class="string">'ViewerException:sliceNotExist:setSliceAlphaData'</span>, <span class="string">'%s is not a valid slice identifier'</span>, slice));
+            <span class="keyword">end</span>
+
+            obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice)]).setLayerAlphaData(layer, data);
+        <span class="keyword">end</span>
+</pre><h2>setLayerVisible<a name="13"></a></h2><p>Set a layers visibility. Note that the slice within which the layer is contained must also be visible if setting this to <tt>on</tt>. Details of the possible states for <tt>Layer</tt> objects are found within the <a href="Layer.html">Layer documentation</a>.</p><p><b>Parameters</b></p><p><tt>slice</tt>: ID of the slice within which <tt>layer</tt> exists</p><p><tt>layer</tt>: string identifier of the layer to which to attach the callback</p><p><tt>visibility</tt>: <tt>char matrix</tt>, either <tt>on</tt> or <tt>off</tt>. Follows normal rules for MATLAB image handle visibilities.</p><pre class="codeinput">        <span class="keyword">function</span> setLayerVisible(obj, slice, layer, visibility)
+            <span class="keyword">if</span> ~ obj.checkSliceExists(slice)
+                throw(MException(<span class="string">'ViewerException:sliceNotExist:setLayerVisible'</span>, <span class="string">'%s is not a valid slice identifier'</span>, slice));
+            <span class="keyword">end</span>
+
+            obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice)]).setLayerVisibility(layer, visibility);
+        <span class="keyword">end</span>
+</pre><h2>setLayerActive<a name="14"></a></h2><p>Set whether a layer is active. See the <a href="Layer.html">Layer documentation</a> for details on the relationship between visibility and activity for <tt>Layer</tt> objects.</p><p><b>Parameters</b></p><p><tt>slice</tt>: ID of the slice within which <tt>layer</tt> exists</p><p><tt>layer</tt>: string identifier of the layer within which is being adjusted</p><p><tt>active</tt>: a <b><tt>bool</tt></b> representing the activity of the layer.</p><pre class="codeinput">        <span class="keyword">function</span> setLayerActive(obj, slice, layer, active)
+            obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice)]).setLayerActive(layer, active);
+        <span class="keyword">end</span>
+</pre><h2>setSliceVisibility<a name="15"></a></h2><p>Slice visibility is an amalgamation of the visibility of constituent <tt>Layer</tt> objects. If a <tt>Layer</tt> is visible, only <tt>Layer</tt> objects contained within that <tt>Layer</tt> <i>and</i> are also visibile are visible within the axes.</p><p><b>Parameters</b></p><p><tt>slice</tt>: ID of the slice within which <tt>layer</tt> exists</p><p><tt>visibility</tt>: new visibility of the slice. Must be <tt>on</tt> or <tt>off</tt>, any other values cause a <tt>SliceException</tt> to be thrown. Follows similar rules to image object visibilities.</p><pre class="codeinput">        <span class="keyword">function</span> setSliceVisibility(obj, slice, visibility)
+            <span class="comment">% Check slice exists</span>
+            <span class="keyword">if</span> ~ obj.checkSliceExists(slice)
+                throw(MException(<span class="string">'ViewerException:sliceNotExist:setSliceVisibility'</span>, <span class="string">'%s is not a valid slice identifier'</span>, slice));
+            <span class="keyword">end</span>
+
+            <span class="comment">% Slice does exist, so assign a new visibility.</span>
+            <span class="keyword">switch</span> visibility
+                <span class="keyword">case</span> <span class="string">'on'</span>
+                    <span class="comment">% Turn the "old" slice off</span>
+                    obj.Handles.slices.([<span class="string">'slice'</span>, num2str(obj.active_slice)]).setVisible(<span class="string">'off'</span>);
+
+                    <span class="comment">% Turn the new one on</span>
+                    obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice)]).setVisible(<span class="string">'on'</span>);
+
+                    <span class="comment">% Update the "old" slice</span>
+                    obj.active_slice = slice;
+                <span class="keyword">case</span> <span class="string">'off'</span>
+                    <span class="comment">% Turn the "old" slice off</span>
+                    obj.Handles.slices.([<span class="string">'slice'</span>, num2str(obj.active_slice)]).setVisible(<span class="string">'off'</span>);
+
+                    <span class="comment">% We no longer have an active slice</span>
+                    obj.active_slice = [];
+                <span class="keyword">otherwise</span>
+                    throw(MException(<span class="string">'ViewerException:invalidSliceVisibility:setSliceVisibility'</span>, <span class="string">'%s is not a valid slice visibility mode'</span>, visibility));
+            <span class="keyword">end</span>
+        <span class="keyword">end</span>
+</pre><h2>getVisibleSlice<a name="16"></a></h2><p>Return the ID of the currently visible slice</p><p><b>Returns</b></p><p><tt>slice</tt>: ID of the currently visible <tt>Slice</tt>. Type is <tt>int32</tt>.</p><pre class="codeinput">        <span class="keyword">function</span> slice = getVisibleSlice(obj)
+<span class="comment">%             fprintf('Visible slice is %i\n', obj.active_slice)</span>
+            slice = obj.active_slice;
+        <span class="keyword">end</span>
+</pre><h2>getLayerVisibility<a name="17"></a></h2><p>Get the visibility of a <tt>Layer</tt> within a <tt>Slice</tt>.</p><p><b>Parameters</b></p><p><tt>slice</tt>: ID of the slice within which <tt>layer</tt> exists</p><p><tt>layer</tt>: <tt>string</tt> identifier of the <tt>Layer</tt> being queried</p><p><b>Returns</b></p><p><tt>visible</tt>: <tt>string</tt> (<tt>on</tt> or <tt>off</tt>) of the <tt>layer</tt></p><pre class="codeinput">        <span class="keyword">function</span> visible = getLayerVisibility(obj, slice, layer)
+            visible = obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice)]).getLayerVisibility(layer);
+        <span class="keyword">end</span>
+</pre><h2>displayInterpolation<a name="18"></a></h2><p>Display an interpolation. Points are taken from a <tt>PointLayer</tt> and displayed on an <i>already existing</i> <tt>InterpolationLayer</tt>. These layers <b>must</b> already exist, they cannot be created within this method. After interpolation, appropriate visibilites and activites of the layers are set; the <tt>InterpolationLayer</tt> is set to active and visible, the <tt>PointLayer</tt> is set to inactive and invisible.</p><p><b>Parameters</b></p><p><tt>slice</tt>: slice ID of the <tt>Slice</tt> within which to perform the interpolaton</p><p><tt>point_layer</tt>: <tt>Layer</tt> of type <tt>PointLayer</tt> from which the stack of points is taken.</p><p><tt>interpolation_layer</tt>: the layer of type <tt>InterpolationLayer</tt> upon which the interpolation should be displayed</p><pre class="codeinput">        <span class="keyword">function</span> displayInterpolation(obj, slice, point_layer, interpolation_layer)
+            <span class="keyword">if</span> ~ obj.checkSliceExists(slice)
+                throw(MException(<span class="string">'ViewerException:sliceNotExist:displayInterpolation'</span>, <span class="string">'%s is not a valid slice identifier'</span>, slice));
+            <span class="keyword">end</span>
+
+            <span class="keyword">try</span>
+                <span class="comment">% Interpolate from point_layer to interpolation_layer</span>
+                obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice)]).interpolateFromPointLayer(point_layer, interpolation_layer);
+
+                <span class="comment">% Set interpolation_layer to active and visible</span>
+                obj.setLayerActive(slice, interpolation_layer, true);
+                obj.setLayerVisible(slice, interpolation_layer, <span class="string">'on'</span>);
+
+                <span class="comment">% Set point_layer to inactive and invisible</span>
+                obj.setLayerActive(slice, point_layer, false);
+                obj.setLayerVisible(slice, point_layer, <span class="string">'off'</span>);
+            <span class="keyword">catch</span> exception
+                warndlg(exception.message, <span class="string">'APEX'</span>);
+            <span class="keyword">end</span>
+        <span class="keyword">end</span>
+</pre><h2>dilateLayerSelection<a name="19"></a></h2><p>Perform the dilation morphological operation upon an <tt>InterpolationLayer</tt>. The dilation uses a disk kernel.</p><p><b>Parameters</b></p><p><tt>slice</tt>: slice ID within which the <tt>InterpolationLayer</tt> is contained</p><p><tt>layer</tt>: string identifier of the <tt>InterpolationLayer</tt></p><p><tt>by</tt>: pixel value to dilate by. Note that 1 is added to this value in order to gain an accurate dilation amount.</p><pre class="codeinput">        <span class="keyword">function</span> dilateLayerSelection(obj, slice, layer, by)
+            <span class="keyword">if</span> ~ obj.checkSliceExists(slice)
+                throw(MException(<span class="string">'ViewerException:sliceNotExist:dilateLayerSelection'</span>, <span class="string">'%s is not a valid slice identifier'</span>, slice));
+            <span class="keyword">end</span>
+
+            obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice)]).dilateLayerSelection(layer, by);
+        <span class="keyword">end</span>
+</pre><h2>erodeLayerSelection<a name="20"></a></h2><p>Perform the erosion morphological operation upon an <tt>InterpolationLayer</tt>. The erosion uses a disk kernel.</p><p><b>Parameters</b></p><p><tt>slice</tt>: slice ID within which the <tt>InterpolationLayer</tt> is contained</p><p><tt>layer</tt>: string identifier of the <tt>InterpolationLayer</tt></p><p><tt>by</tt>: pixel value to erode by. Note that 1 is added to this value in order to gain an accurate erosion amount.</p><pre class="codeinput">        <span class="keyword">function</span> erodeLayerSelection(obj, slice, layer, by)
+            <span class="keyword">if</span> ~ obj.checkSliceExists(slice)
+                throw(MException(<span class="string">'ViewerException:sliceNotExist:erodeLayerSelection'</span>, <span class="string">'%s is not a valid slice identifier'</span>, slice));
+            <span class="keyword">end</span>
+
+            obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice)]).erodeLayerSelection(layer, by);
+        <span class="keyword">end</span>
+</pre><h2>each<a name="21"></a></h2><p>Execute a callback within the context of each <tt>Layer</tt> within all <tt>Layer</tt> objects. A typical callback function looks like:</p><pre>function callback(i, layer)
+   do_action(layer);
+end</pre><p>Where <tt>i</tt> is the current <tt>Layer</tt> ID and <tt>layer</tt> is the current <tt>Layer</tt> object. Remember that unless ones uses <tt>class(layer)</tt>, the type of <tt>layer</tt> must be assumed as <tt>Layer</tt>. Examples of this usage are the <tt>saveCallback</tt> and <tt>loadCallback</tt> within <tt>apex.m</tt>.</p><p><b>Parameters</b></p><p><tt>fcn</tt>: function handle or anonymous function to be executed in each <tt>Layer</tt> object within the system</p><pre class="codeinput">        <span class="keyword">function</span> each(obj, fcn)
+            fh = fieldnames(obj.Handles.slices);
+            <span class="keyword">for</span> i = 1 : length(fh)
+                obj.Handles.slices.(fh{i}).doAction(i, fcn);
+            <span class="keyword">end</span>
+        <span class="keyword">end</span>
+</pre><h2>setContrastEnabled<a name="22"></a></h2><p>Enable the contrast viewer on a <tt>BitmapLayer</tt>.</p><p><b>Parameters</b></p><p><tt>slice</tt>: slice ID within which <tt>layer</tt> is contained</p><p><tt>layer</tt>: layer ID for which the contrast tool should be enabled</p><p><tt>enabled</tt>: <tt>bool</tt> representing state of contrast tool</p><pre class="codeinput">        <span class="keyword">function</span> setConstrastEnabled(obj, slice, layer, enabled)
+            <span class="keyword">if</span> ~ obj.checkSliceExists(slice)
+                throw(MException(<span class="string">'ViewerException:sliceNotExist:setConstrastEnabled'</span>, <span class="string">'%s is not a valid slice identifier'</span>, slice));
+            <span class="keyword">end</span>
+
+            obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice)]).setContrastEnabled(layer, enabled);
+        <span class="keyword">end</span>
+</pre><h2>setContrastEnabled<a name="23"></a></h2><p>Enable the high-powered zoom on a <tt>BitmapLayer</tt>.</p><p><b>Parameters</b></p><p><tt>slice</tt>: slice ID within which <tt>layer</tt> is contained</p><p><tt>layer</tt>: layer ID for which the high-powered zoom should be enabled</p><p><tt>enabled</tt>: <tt>bool</tt> representing state of high-powered zoom</p><pre class="codeinput">        <span class="keyword">function</span> setZoomEnabled(obj, slice, layer, enabled)
+            <span class="keyword">if</span> ~ obj.checkSliceExists(slice)
+                throw(MException(<span class="string">'ViewerException:sliceNotExist:setConstrastEnabled'</span>, <span class="string">'%s is not a valid slice identifier'</span>, slice));
+            <span class="keyword">end</span>
+
+            obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice)]).setZoomEnabled(layer, enabled);
+        <span class="keyword">end</span>
+</pre><h2>setCopySlice<a name="24"></a></h2><p>Assign the slice to be copied from</p><p><b>Parameters</b></p><p><tt>slice</tt>: the slice ID to be copied from</p><pre class="codeinput">        <span class="keyword">function</span> setCopySlice(obj, slice)
+            <span class="keyword">if</span> ~ obj.checkSliceExists(slice)
+                throw(MException(<span class="string">'ViewerException:sliceNotExist:setCopySlice'</span>, <span class="string">'%s is not a valid slice identifier'</span>, slice));
+            <span class="keyword">end</span>
+
+            obj.copy_slice = slice;
+        <span class="keyword">end</span>
+</pre><h2>triggerPaste<a name="25"></a></h2><p>Trigger the pasting mechanism (see above for details).</p><p><b>Parameters</b></p><p><tt>slice</tt>: the slice ID of the target slice</p><p><tt>to_copy</tt>: cell array of <tt>char</tt> describing which layers to copy (usually <tt>{'Point', 'Interpolation'}</tt>).</p><pre class="codeinput">        <span class="keyword">function</span> triggerPaste(obj, slice, to_copy)
+            <span class="keyword">if</span> ~ obj.checkSliceExists(slice)
+                throw(MException(<span class="string">'ViewerException:sliceNotExist:triggerPaste'</span>, <span class="string">'%s is not a valid slice identifier'</span>, slice));
+            <span class="keyword">end</span>
+
+            <span class="keyword">if</span> obj.copy_slice == false
+                warndlg(<span class="string">'Need to copy first!'</span>, <span class="string">'APEX/F'</span>);
+                <span class="keyword">return</span>
+            <span class="keyword">end</span>
+
+            obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice)]).copyFromSlice(obj.Handles.slices.([<span class="string">'slice'</span>, num2str(obj.copy_slice)]), to_copy);
+        <span class="keyword">end</span>
+</pre><h2>undoLastClick<a name="26"></a></h2><p>Undo the last click in the specified <tt>PointLayer</tt>. This can be called <tt>n</tt> times, where <tt>n</tt> is the number of points within the layer.</p><p><b>Parameters</b></p><p><tt>slice</tt>: slice ID containing the target layer</p><p><tt>layer</tt>: the layer to undo the click on. Must be a <tt>PointLayer</tt> identifier, otherwise a <tt>SliceException</tt> is thrown.</p><pre class="codeinput">        <span class="keyword">function</span> undoLastClick(obj, slice, layer)
+            <span class="keyword">if</span> ~ obj.checkSliceExists(slice)
+                throw(MException(<span class="string">'ViewerException:sliceNotExist:undoLastPoint'</span>, <span class="string">'%s is not a valid slice identifier'</span>, slice));
+            <span class="keyword">end</span>
+
+            obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice)]).undoLastClick(layer);
+        <span class="keyword">end</span>
+</pre><h2>clearLayer<a name="27"></a></h2><p>Clear all data (CData and AlphaData) within a given layer.</p><p><b>Parameters</b></p><p><tt>slice</tt>: ID of the target slice</p><p><tt>layer</tt>: ID of the target layer. Must be contained within the specified slice.</p><pre class="codeinput">        <span class="keyword">function</span> clearLayer(obj, slice, layer)
+            obj.Handles.slices.([<span class="string">'slice'</span>, num2str(slice)]).clearLayer(layer);
+        <span class="keyword">end</span>
+</pre><pre class="codeinput">    <span class="keyword">end</span>
+
+    methods (Access = private)
+</pre><h2>checkSliceExists<a name="29"></a></h2><p>Query the existance of a slice. Note that this method is <b>private</b> and is not called externally to <tt>Viewer</tt>. Ideally, there should not be an opportunity for the user to select a slice that does not exist but if there is, the mechanism to handle this should be a caught exception in the top-level calling scope.</p><p><b>Parameters</b></p><p><tt>id</tt>: ID of the slice being queried for existance</p><p><b>Returns</b></p><p><tt>exixsts</tt>: a <tt>bool</tt> representing if the slice exists</p><pre class="codeinput">        <span class="keyword">function</span> exists = checkSliceExists(obj, id)
+            exists = isfield(obj.Handles.slices, [<span class="string">'slice'</span> num2str(id)]);
+        <span class="keyword">end</span>
+</pre><pre class="codeinput">    <span class="keyword">end</span>
+</pre><pre class="codeinput"><span class="keyword">end</span>
+</pre><p class="footer"><br>
+      Published with MATLAB&reg; 7.12<br></p></div><!--
+##### SOURCE BEGIN #####
+%% Viewer
+% A |Viewer| class is the highest level abstraction in the system. It is an
+% abstraction for multiple |Slice| s. The philosophy is that the user should
+% issue commands to |Viewer| classes, which then performs the tasks on
+% behalf of the users. Usually, these are high-level operations (such as
+% copy and paste), and any additional non-trivial functionality should be
+% added by adding an appropriate method within |Viewer|. _However_, because
+% of the nature of |Viewer|, most of the functionality provided is routing
+% to the appropriate |Layer|. Still, |Viewer| is an important abstraction
+% within the APEX graphical stack.
+%
+% |Viewer| contains multiple Slices, which are stored as a |struct()|
+% identified by |obj.Handles| (notice the importance of the capital 'H').
+% Instantiating a |Viewer| will create an |axes| object and some associated
+% graphical elements.
+% 
+%% Copy and Pasting
+% The copy and pasting mechanism appears complicated, and yet is rather
+% simple.
+%
+% Within |Viewer|, the |copy_slice| property contains the ID of the slice
+% to be copied. When the triggerPaste methods is called, |Viewer| delegates
+% to |Slice.copyFromSlice|, whilst passing the |Slice| to be copied from -
+% this is the copy slice (CS).
+%
+% |Layer| defines three abstract methods, |hasDataForCopy|,
+% |getDataForCopy| and |setCopyData|. These methods must be implemented on
+% each of the |Layer| subclasses (|BitmapLayer|, |PointLayer| and
+% |InterpolationLayer|).
+%
+%  methods (Abstract)
+%     has_data = hasDataForCopy(obj);
+%     data = getDataForCopy(obj);
+%     setCopyData(obj, data);
+%  end
+%
+% If the CS returns true for |hasCopyData|, then |getDataForCopy| is
+% called. The result of this is called to |setCopyData| on the target
+% layer. Because each layer type implements these methods, the data is
+% correctly assigned.
+%
+% *APEX/F Documentation*
+%
+% * <bootstrap.html Architecture and Bootstrapping>
+% * <Viewer.html Viewer>
+% * <Slice.html Slice>
+% * <Layer.html Layer>
+% * <BitmapLayer.html BitmapLayer>
+% * <PointLayer.html PointLayer>
+% * <InterpolationLayer.html InterpolationLayer>
+%
+% <<general-arch.png>>
+%
+classdef Viewer < handle
+    %% Properties (Private)
+    % *|parent|*: the parent figure to which a Viewer should be attached. An
+    % |axes| will be created within |parent|.
+    %
+    % *|active_slice|*: the |Slice| that is currently visible.
+    %
+    % *|copy_slice|*: the slice to which the data is to be copied from. The
+    % copy and paste system will be explained further within this document.
+    %
+    % *|Handles|*: a |struct()| containing Handles. |Handles.slices|
+    % contains |Slice| objects.
+    properties (Access = private)
+        parent
+        active_slice
+        copy_slice
+        Handles
+    end
+    
+    methods (Access = public)
+        %% Viewer (constructor)
+        % Instantiate an instance of |Viewer|. Some graphical elements will
+        % also be created, such as a |uipanel|. The details of the
+        % |uipanel| are abstracted away from the user. The colormap of the
+        % |axes| will also be set to *bone* (because this map is the most
+        % appropriate for CT scan data).
+        %
+        % *Parameters*
+        %
+        % |parent|: figure handle in which to place the Viewer.
+        function obj = Viewer(parent)
+            obj.parent = parent;
+            
+            % Create GUI elements
+            obj.Handles.panel = uipanel('Parent', obj.parent);
+            obj.Handles.axis = axes('Parent', obj.Handles.panel, ...
+                                    'YDir', 'reverse', ...
+                                    'Units', 'pixels');
+                                
+            obj.Handles.slices = struct();
+            obj.active_slice = 1;
+            obj.copy_slice = false;
+            
+            % Change properties of the 
+%             hold(obj.Handles.axis, 'on');
+            colormap(obj.Handles.axis, 'bone');
+        end
+        
+        %% setSize (unused)
+        % Change the size of the |uipanel|.
+        %
+        % *Parameters*
+        %
+        % |dims|: 1*4 matrix containing |[left bottom width height]| values.
+        % Remembers that the bottom left hand corner of the figure is (0,
+        % 0).
+        function setSize(obj, dims)
+            set(obj.Handles.panel, 'Position', dims);
+        end
+        
+        %% assignSlice
+        % Create a new slice and add it to the |Viewer|. The order of
+        % creation *is* important, although somewhat insignificant until
+        % |Layer| s are added to the slice. Slices cannot be re-ordered
+        % after assignment.
+        %
+        % *Parameters*
+        %
+        % |id|: the identifier of the newly created |Slice|.
+        function assignSlice(obj, id)
+            if obj.checkSliceExists(id)
+                throw(MException('ViewerException:sliceExists:assignSlice', 'Slice %s already exists', id));
+            end
+            
+            obj.Handles.slices.(['slice', num2str(id)]) = Slice(obj.Handles.axis, id);
+        end
+        
+        %% assignLayer
+        % Create a new |Layer| (with a name and kind). Data assignments to
+        % the |Layer| are performed with separate methods to avoid
+        % duplication of effort.
+        %
+        % *Parameters*
+        %
+        % |slice_id|: the ID of the |Slice| in which to create the |Layer|
+        %
+        % |layer_name|: the string identifier of the |Layer|
+        %
+        % |layer_kind|: the type of the layer created. Must be one of:
+        %
+        % * |Bitmap|
+        % * |Point|
+        % * |Interpolation|
+        %
+        % If this is not the case, a |SliceException| is thrown.
+        %
+        % Different types of |Layer| are described in the <Layer.html
+        % appropriate documentation>.
+        function assignLayer(obj, slice_id, layer_name, layer_kind)
+            if ~ obj.checkSliceExists(slice_id)
+                throw(MException('ViewerException:sliceNotExist:assignLayer', '%s is not a valid slice identifier', slice_id));
+            end
+            
+            obj.Handles.slices.(['slice', num2str(slice_id)]).assignLayer(layer_kind, layer_name);
+        end
+        
+        %% addSliceButtonDownListener
+        % Assign a callback to execute upon mouse *click* (_not_
+        % dragging!). The callback will execute in the scope of the |Layer|
+        % object. Further documentation on this mechanism can be found
+        % within the <Layer.html Layer documentation>.
+        %
+        % *Parameters*
+        %
+        % |slice|: ID of the slice within which |layer| exists
+        %
+        % |layer|: string identifier of the layer to which to attach the
+        % callback
+        %
+        % |fcn|: function identifier or anonymous function to attach to the
+        % event
+        function addSliceButtonDownListener(obj, slice, layer, fcn)
+            if ~ obj.checkSliceExists(slice)
+                throw(MException('ViewerException:sliceNotExist:addsliceButtonDownListener', '%s is not a valid slice identifier', slice));
+            end
+            
+            obj.Handles.slices.(['slice', num2str(slice)]).addLayerButtonDownListener(layer, fcn);
+        end
+        
+        %% addSliceButtonUpListener
+        % Similar to |Viewer.addSliceButtonDownListener|, except fires upon
+        % mouse _up_.
+        %
+        % *Parameters*
+        %
+        % |slice|: ID of the slice within which |layer| exists
+        %
+        % |layer|: string identifier of the layer to which to attach the
+        % callback
+        %
+        % |fcn|: function identifier or anonymous function to attach to the
+        % event
+        function addSliceButtonUpListener(obj, slice, layer, fcn)
+            if ~ obj.checkSliceExists(slice)
+                throw(MException('ViewerException:sliceNotExist:addsliceButtonUpListener', '%s is not a valid slice identifier', slice));
+            end
+            
+            obj.Handles.slices.(['slice', num2str(slice)]).addLayerButtonUpListener(layer, fcn);
+        end
+        
+        %% addSliceButtonMotionListener
+        % Similar to |Viewer.addSliceButtonDownListener| and
+        % |Viewer.addSliceButtonUpListener|, except fires upon mouse drag.
+        % *Note that only one Motion Listener should be attached at any
+        % given time. This is due to a limiation within MATLABs listener
+        % architecture  whereby a listener is attached to a |figure| and
+        % not an |image|, like in Button Listeners*.
+        %
+        % *Parameters*
+        %
+        % |slice|: ID of the slice within which |layer| exists
+        %
+        % |layer|: string identifier of the layer to which to attach the
+        % callback
+        %
+        % |fcn|: function identifier or anonymous function to attach to the
+        % event
+        function addSliceButtonMotionListener(obj, slice, layer, fcn)
+            if ~ obj.checkSliceExists(slice)
+                throw(MException('ViewerException:sliceNotExist:addSliceButtonMotionListener', '%s is not a valid slice identifier', slice));
+            end
+            
+            obj.Handles.slices.(['slice', num2str(slice)]).addLayerButtonMotionListener(layer, fcn);
+        end
+        
+        %% removeSliceButtonMotionListener
+        % Removes a Motion Listener from the identified slice.
+        %
+        % *Parameters*
+        %
+        % |slice|: ID of the slice within which |layer| exists
+        %
+        % |layer|: string identifier of the layer to which to attach the
+        % callback
+        function removeSliceButtonMotionListener(obj, slice, layer)
+            if ~ obj.checkSliceExists(slice)
+                throw(MException('ViewerException:sliceNotExist:removeSliceButtonMotionListener', '%s is not a valid slice identifier', slice));
+            end
+            
+            obj.Handles.slices.(['slice', num2str(slice)]).removeLayerButtonMotionListener(layer);
+        end
+        
+        %% setLayerCData
+        % Sets the CData for a given |Layer|.
+        %
+        % *Parameters*
+        %
+        % |slice|: ID of the slice within which |layer| exists
+        %
+        % |layer|: string identifier of the layer to which to attach the
+        % callback
+        %
+        % |data|: 2-dimensional (|n*m|) data to be applied. Follows normal
+        % rules for CData.
+        function setLayerCData(obj, slice, layer, data)
+            if ~ obj.checkSliceExists(slice)
+                throw(MException('ViewerException:sliceNotExist:setSliceCData', '%s is not a valid slice identifier', slice));
+            end
+            
+            obj.Handles.slices.(['slice', num2str(slice)]).setLayerCData(layer, data);
+        end
+        
+        %% setLayerAlphaData
+        % Sets the AlphaData for a given |Layer|.
+        %
+        % *Parameters*
+        %
+        % |slice|: ID of the slice within which |layer| exists
+        %
+        % |layer|: string identifier of the layer to which to attach the
+        % callback
+        %
+        % |data|: 2-dimensional (|n*m|) data to be applied. Follows normal
+        % rules for AlphaData. Should be a binary image.
+        function setLayerAlphaData(obj, slice, layer, data)
+            if ~ obj.checkSliceExists(slice)
+                throw(MException('ViewerException:sliceNotExist:setSliceAlphaData', '%s is not a valid slice identifier', slice));
+            end
+            
+            obj.Handles.slices.(['slice', num2str(slice)]).setLayerAlphaData(layer, data);
+        end
+        
+        %% setLayerVisible
+        % Set a layers visibility. Note that the slice within which the layer
+        % is contained must also be visible if setting this to |on|. Details of the possible states
+        % for |Layer| objects are found within the <Layer.html Layer
+        % documentation>.
+        %
+        % *Parameters*
+        %
+        % |slice|: ID of the slice within which |layer| exists
+        %
+        % |layer|: string identifier of the layer to which to attach the
+        % callback
+        %
+        % |visibility|: |char matrix|, either |on| or |off|. Follows normal rules
+        % for MATLAB image handle visibilities.
+        function setLayerVisible(obj, slice, layer, visibility)
+            if ~ obj.checkSliceExists(slice)
+                throw(MException('ViewerException:sliceNotExist:setLayerVisible', '%s is not a valid slice identifier', slice));
+            end
+            
+            obj.Handles.slices.(['slice', num2str(slice)]).setLayerVisibility(layer, visibility);
+        end
+        
+        %% setLayerActive
+        % Set whether a layer is active. See the <Layer.html Layer
+        % documentation> for details on the relationship between visibility
+        % and activity for |Layer| objects.
+        %
+        % *Parameters*
+        %
+        % |slice|: ID of the slice within which |layer| exists
+        %
+        % |layer|: string identifier of the layer within which is being
+        % adjusted
+        %
+        % |active|: a *|bool|* representing the activity of the layer.
+        function setLayerActive(obj, slice, layer, active)
+            obj.Handles.slices.(['slice', num2str(slice)]).setLayerActive(layer, active);
+        end
+        
+        %% setSliceVisibility
+        % Slice visibility is an amalgamation of the visibility of
+        % constituent |Layer| objects. If a |Layer| is visible, only
+        % |Layer| objects contained within that |Layer| _and_ are also
+        % visibile are visible within the axes.
+        %
+        % *Parameters*
+        %
+        % |slice|: ID of the slice within which |layer| exists
+        %
+        % |visibility|: new visibility of the slice. Must be |on| or
+        % |off|, any other values cause a |SliceException| to be thrown.
+        % Follows similar rules to image object visibilities.
+        function setSliceVisibility(obj, slice, visibility)
+            % Check slice exists
+            if ~ obj.checkSliceExists(slice)
+                throw(MException('ViewerException:sliceNotExist:setSliceVisibility', '%s is not a valid slice identifier', slice));
+            end
+            
+            % Slice does exist, so assign a new visibility.
+            switch visibility
+                case 'on'
+                    % Turn the "old" slice off
+                    obj.Handles.slices.(['slice', num2str(obj.active_slice)]).setVisible('off');
+                    
+                    % Turn the new one on
+                    obj.Handles.slices.(['slice', num2str(slice)]).setVisible('on');
+                    
+                    % Update the "old" slice
+                    obj.active_slice = slice;
+                case 'off'
+                    % Turn the "old" slice off
+                    obj.Handles.slices.(['slice', num2str(obj.active_slice)]).setVisible('off');
+                    
+                    % We no longer have an active slice
+                    obj.active_slice = [];
+                otherwise
+                    throw(MException('ViewerException:invalidSliceVisibility:setSliceVisibility', '%s is not a valid slice visibility mode', visibility));
+            end
+        end
+        
+        %% getVisibleSlice
+        % Return the ID of the currently visible slice
+        %
+        % *Returns*
+        %
+        % |slice|: ID of the currently visible |Slice|. Type is |int32|.
+        function slice = getVisibleSlice(obj)
+%             fprintf('Visible slice is %i\n', obj.active_slice)
+            slice = obj.active_slice;
+        end
+        
+        %% getLayerVisibility
+        % Get the visibility of a |Layer| within a |Slice|.
+        %
+        % *Parameters*
+        %
+        % |slice|: ID of the slice within which |layer| exists
+        %
+        % |layer|: |string| identifier of the |Layer| being queried
+        %
+        % *Returns*
+        %
+        % |visible|: |string| (|on| or |off|) of the |layer|
+        function visible = getLayerVisibility(obj, slice, layer)
+            visible = obj.Handles.slices.(['slice', num2str(slice)]).getLayerVisibility(layer);
+        end
+    
+        %% displayInterpolation
+        % Display an interpolation. Points are taken from a |PointLayer|
+        % and displayed on an _already existing_ |InterpolationLayer|.
+        % These layers *must* already exist, they cannot be created within
+        % this method. After interpolation, appropriate visibilites and
+        % activites of the layers are set; the |InterpolationLayer| is set
+        % to active and visible, the |PointLayer| is set to inactive and
+        % invisible.
+        %
+        % *Parameters*
+        %
+        % |slice|: slice ID of the |Slice| within which to perform the
+        % interpolaton
+        %
+        % |point_layer|: |Layer| of type |PointLayer| from which the stack
+        % of points is taken.
+        %
+        % |interpolation_layer|: the layer of type |InterpolationLayer|
+        % upon which the interpolation should be displayed
+        function displayInterpolation(obj, slice, point_layer, interpolation_layer)
+            if ~ obj.checkSliceExists(slice)
+                throw(MException('ViewerException:sliceNotExist:displayInterpolation', '%s is not a valid slice identifier', slice));
+            end
+            
+            try
+                % Interpolate from point_layer to interpolation_layer
+                obj.Handles.slices.(['slice', num2str(slice)]).interpolateFromPointLayer(point_layer, interpolation_layer);
+                
+                % Set interpolation_layer to active and visible
+                obj.setLayerActive(slice, interpolation_layer, true);
+                obj.setLayerVisible(slice, interpolation_layer, 'on');
+            
+                % Set point_layer to inactive and invisible
+                obj.setLayerActive(slice, point_layer, false);
+                obj.setLayerVisible(slice, point_layer, 'off');
+            catch exception
+                warndlg(exception.message, 'APEX');
+            end
+        end
+        
+        %% dilateLayerSelection
+        % Perform the dilation morphological operation upon an
+        % |InterpolationLayer|. The dilation uses a disk kernel.
+        %
+        % *Parameters*
+        %
+        % |slice|: slice ID within which the |InterpolationLayer| is
+        % contained
+        %
+        % |layer|: string identifier of the |InterpolationLayer|
+        %
+        % |by|: pixel value to dilate by. Note that 1 is added to this
+        % value in order to gain an accurate dilation amount.
+        function dilateLayerSelection(obj, slice, layer, by)
+            if ~ obj.checkSliceExists(slice)
+                throw(MException('ViewerException:sliceNotExist:dilateLayerSelection', '%s is not a valid slice identifier', slice));
+            end
+            
+            obj.Handles.slices.(['slice', num2str(slice)]).dilateLayerSelection(layer, by);
+        end
+        
+        %% erodeLayerSelection
+        % Perform the erosion morphological operation upon an
+        % |InterpolationLayer|. The erosion uses a disk kernel.
+        %
+        % *Parameters*
+        %
+        % |slice|: slice ID within which the |InterpolationLayer| is
+        % contained
+        %
+        % |layer|: string identifier of the |InterpolationLayer|
+        %
+        % |by|: pixel value to erode by. Note that 1 is added to this
+        % value in order to gain an accurate erosion amount.
+        function erodeLayerSelection(obj, slice, layer, by)
+            if ~ obj.checkSliceExists(slice)
+                throw(MException('ViewerException:sliceNotExist:erodeLayerSelection', '%s is not a valid slice identifier', slice));
+            end
+            
+            obj.Handles.slices.(['slice', num2str(slice)]).erodeLayerSelection(layer, by);
+        end
+        
+        %% each
+        % Execute a callback within the context of each |Layer| within all
+        % |Layer| objects. A typical callback function looks like:        
+        % 
+        %  function callback(i, layer)
+        %     do_action(layer);
+        %  end
+        % 
+        % Where |i| is the current |Layer| ID and |layer| is the current
+        % |Layer| object. Remember that unless ones uses |class(layer)|,
+        % the type of |layer| must be assumed as |Layer|. Examples of this
+        % usage are the |saveCallback| and |loadCallback| within |apex.m|.
+        %
+        % *Parameters*
+        %
+        % |fcn|: function handle or anonymous function to be executed in
+        % each |Layer| object within the system
+        function each(obj, fcn)
+            fh = fieldnames(obj.Handles.slices);
+            for i = 1 : length(fh)
+                obj.Handles.slices.(fh{i}).doAction(i, fcn);
+            end
+        end
+        
+        %% setContrastEnabled
+        % Enable the contrast viewer on a |BitmapLayer|.
+        %
+        % *Parameters*
+        %
+        % |slice|: slice ID within which |layer| is contained
+        %
+        % |layer|: layer ID for which the contrast tool should be enabled
+        %
+        % |enabled|: |bool| representing state of contrast tool
+        function setConstrastEnabled(obj, slice, layer, enabled)
+            if ~ obj.checkSliceExists(slice)
+                throw(MException('ViewerException:sliceNotExist:setConstrastEnabled', '%s is not a valid slice identifier', slice));
+            end
+            
+            obj.Handles.slices.(['slice', num2str(slice)]).setContrastEnabled(layer, enabled);
+        end
+        
+        %% setContrastEnabled
+        % Enable the high-powered zoom on a |BitmapLayer|.
+        %
+        % *Parameters*
+        %
+        % |slice|: slice ID within which |layer| is contained
+        %
+        % |layer|: layer ID for which the high-powered zoom should be enabled
+        %
+        % |enabled|: |bool| representing state of high-powered zoom
+        function setZoomEnabled(obj, slice, layer, enabled)
+            if ~ obj.checkSliceExists(slice)
+                throw(MException('ViewerException:sliceNotExist:setConstrastEnabled', '%s is not a valid slice identifier', slice));
+            end
+            
+            obj.Handles.slices.(['slice', num2str(slice)]).setZoomEnabled(layer, enabled);
+        end
+        
+        %% setCopySlice
+        % Assign the slice to be copied from
+        %
+        % *Parameters*
+        %
+        % |slice|: the slice ID to be copied from
+        function setCopySlice(obj, slice)
+            if ~ obj.checkSliceExists(slice)
+                throw(MException('ViewerException:sliceNotExist:setCopySlice', '%s is not a valid slice identifier', slice));
+            end
+            
+            obj.copy_slice = slice;
+        end
+        
+        %% triggerPaste
+        % Trigger the pasting mechanism (see above for details).
+        %
+        % *Parameters*
+        %
+        % |slice|: the slice ID of the target slice
+        %
+        % |to_copy|: cell array of |char| describing which layers to copy
+        % (usually |{'Point', 'Interpolation'}|).
+        function triggerPaste(obj, slice, to_copy)
+            if ~ obj.checkSliceExists(slice)
+                throw(MException('ViewerException:sliceNotExist:triggerPaste', '%s is not a valid slice identifier', slice));
+            end
+            
+            if obj.copy_slice == false
+                warndlg('Need to copy first!', 'APEX/F');
+                return
+            end
+            
+            obj.Handles.slices.(['slice', num2str(slice)]).copyFromSlice(obj.Handles.slices.(['slice', num2str(obj.copy_slice)]), to_copy);
+        end
+        
+        %% undoLastClick
+        % Undo the last click in the specified |PointLayer|. This can be
+        % called |n| times, where |n| is the number of points within the
+        % layer.
+        %
+        % *Parameters*
+        %
+        % |slice|: slice ID containing the target layer
+        %
+        % |layer|: the layer to undo the click on. Must be a |PointLayer|
+        % identifier, otherwise a |SliceException| is thrown.
+        function undoLastClick(obj, slice, layer)
+            if ~ obj.checkSliceExists(slice)
+                throw(MException('ViewerException:sliceNotExist:undoLastPoint', '%s is not a valid slice identifier', slice));
+            end
+            
+            obj.Handles.slices.(['slice', num2str(slice)]).undoLastClick(layer);
+        end
+        
+        %% clearLayer
+        % Clear all data (CData and AlphaData) within a given layer.
+        %
+        % *Parameters*
+        %
+        % |slice|: ID of the target slice
+        %
+        % |layer|: ID of the target layer. Must be contained within the
+        % specified slice.
+        function clearLayer(obj, slice, layer)
+            obj.Handles.slices.(['slice', num2str(slice)]).clearLayer(layer);
+        end
+    end
+    
+    methods (Access = private)
+        %% checkSliceExists
+        % Query the existance of a slice. Note that this method is
+        % *private* and is not called externally to |Viewer|. Ideally,
+        % there should not be an opportunity for the user to select a slice
+        % that does not exist but if there is, the mechanism to handle this
+        % should be a caught exception in the top-level calling scope.
+        %
+        % *Parameters*
+        %
+        % |id|: ID of the slice being queried for existance
+        %
+        % *Returns*
+        %
+        % |exixsts|: a |bool| representing if the slice exists
+        function exists = checkSliceExists(obj, id)
+            exists = isfield(obj.Handles.slices, ['slice' num2str(id)]);
+        end
+    end
+end
+##### SOURCE END #####
+--></body></html>
